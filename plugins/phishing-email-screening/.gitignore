@@ -1,0 +1,11 @@
+config/config.local.json*
+work/
+reports/
+logs/
+coverage/
+node_modules/
+.workbuddy/
+__pycache__/
+*.pyc
+*.tmp
+*.log

@@ -1,0 +1,21 @@
+{
+  "name": "hq-itops-plugin-marketplace",
+  "description": "HQ ITOps plugins for Codex and CodeBuddy.",
+  "owner": {
+    "name": "HQ ITOps"
+  },
+  "plugins": [
+    {
+      "name": "phishing-email-screening",
+      "source": "./plugins/phishing-email-screening",
+      "description": "Screen Coremail metadata and synchronize abnormal findings to configured Notion pages.",
+      "version": "1.0.0"
+    },
+    {
+      "name": "api-token-automation",
+      "source": "./plugins/api-token-automation",
+      "description": "Refresh Bearer tokens for the fixed Postman automation targets.",
+      "version": "1.0.0"
+    }
+  ]
+}

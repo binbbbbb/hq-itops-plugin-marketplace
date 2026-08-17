@@ -1,0 +1,20 @@
+{
+  "name": "api-token-automation",
+  "version": "1.0.0",
+  "description": "Refresh Bearer tokens for the fixed Postman automation targets.",
+  "author": {
+    "name": "HQ ITOps"
+  },
+  "keywords": ["postman", "bearer-token", "api", "automation"],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "API Token Automation",
+    "shortDescription": "Refresh fixed Postman Bearer tokens",
+    "longDescription": "Run the fixed deterministic workflow that refreshes Bearer tokens for the configured Postman targets.",
+    "developerName": "HQ ITOps",
+    "category": "Developer Tools",
+    "capabilities": ["Interactive", "Write"],
+    "defaultPrompt": ["Refresh the fixed Postman Bearer-token targets."],
+    "brandColor": "#0EA5E9"
+  }
+}

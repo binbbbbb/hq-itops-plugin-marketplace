@@ -1,0 +1,4 @@
+interface:
+  display_name: "Refresh Postman Bearer Tokens"
+  short_description: "Refresh fixed Postman API Bearer tokens"
+  default_prompt: "Use $refresh-postman-bearer-tokens to refresh the fixed Postman Bearer-token targets."

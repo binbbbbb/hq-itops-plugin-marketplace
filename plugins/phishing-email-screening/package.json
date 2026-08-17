@@ -1,0 +1,17 @@
+{
+  "name": "phishing-email-screening",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Coremail metadata-based phishing email pre-screening with Notion integration.",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "scan": "node src/cli.js",
+    "check:cookie-helper": "python -m py_compile scripts/get_coremail_cookie.py",
+    "mcp-config": "node src/show-mcp-config.js",
+    "test": "node tests/run-all.js",
+    "check": "node --check src/cli.js"
+  }
+}

@@ -1,0 +1,78 @@
+{
+  "timezone": "Asia/Shanghai",
+  "coremail": {
+    "baseUrl": "https://157.255.37.89",
+    "auth": {
+      "mode": "playwright",
+      "username": "REPLACE_LOCALLY_AND_NEVER_COMMIT",
+      "password": "REPLACE_LOCALLY_AND_NEVER_COMMIT",
+      "pythonCommand": "python",
+      "scriptPath": "scripts/get_coremail_cookie.py",
+      "loginPath": "/webadmin/",
+      "browserChannel": "chrome",
+      "headless": true,
+      "timeoutMs": 30000,
+      "postLoginWaitMs": 1000
+    },
+    "allowInsecureTls": true,
+    "timeoutMs": 20000,
+    "pageSize": 100
+  },
+  "notion": {
+    "mode": "mcp",
+    "token": "REPLACE_LOCALLY_AND_NEVER_COMMIT",
+    "apiVersion": "2026-03-11",
+    "allowlistPageId": "REPLACE_WITH_PAGE_ID",
+    "resultsPageId": "REPLACE_WITH_PAGE_ID",
+    "executionLogPageId": "REPLACE_WITH_PAGE_ID",
+    "allowlistDataSourceId": "REPLACE_WITH_DATA_SOURCE_ID",
+    "resultsDataSourceId": "REPLACE_WITH_DATA_SOURCE_ID",
+    "allowlistProperties": {
+      "value": "规则值",
+      "type": "类型",
+      "enabled": "启用",
+      "validFrom": "生效时间",
+      "validUntil": "失效时间",
+      "note": "备注"
+    },
+    "resultProperties": {
+      "title": "标题",
+      "messageId": "邮件 ID",
+      "recordType": "记录类型",
+      "mailTime": "邮件时间",
+      "sender": "发件人",
+      "receiver": "收件人",
+      "subject": "主题",
+      "classification": "分类",
+      "confidence": "置信度",
+      "reasons": "判断原因",
+      "action": "建议动作",
+      "fromOrg": "发件组织",
+      "toOrg": "收件组织",
+      "server": "服务器",
+      "scanRange": "扫描范围",
+      "runId": "运行 ID",
+      "handlingStatus": "处理状态"
+    }
+  },
+  "classification": {
+    "internalDomains": ["huaqin.com"],
+    "approvedServers": [
+      { "name": "app", "ip": "10.11.72.126" }
+    ],
+    "sensitiveSubjectKeywords": [
+      "紧急付款",
+      "修改收款账户",
+      "密码到期",
+      "账号冻结",
+      "点击登录",
+      "验证码",
+      "立即转账",
+      "工资补贴"
+    ],
+    "localAllowlist": {
+      "emails": [],
+      "domains": []
+    }
+  }
+}

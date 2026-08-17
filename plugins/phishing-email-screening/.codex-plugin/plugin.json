@@ -1,0 +1,34 @@
+{
+  "name": "phishing-email-screening",
+  "version": "1.0.0",
+  "description": "Coremail metadata phishing-email pre-screening with configured Notion synchronization.",
+  "author": {
+    "name": "Phishing Email Screening Maintainers"
+  },
+  "keywords": [
+    "phishing",
+    "email-security",
+    "coremail",
+    "notion",
+    "screening"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Phishing Email Screening",
+    "shortDescription": "Screen Coremail metadata for suspicious email",
+    "longDescription": "Run the fixed Coremail metadata pre-screening workflow for a requested date range and synchronize abnormal findings to the configured Notion pages when available.",
+    "developerName": "Phishing Email Screening Maintainers",
+    "category": "Productivity",
+    "capabilities": [
+      "Interactive",
+      "Read",
+      "Write"
+    ],
+    "defaultPrompt": [
+      "Scan today's company email metadata for phishing risk.",
+      "Screen company email metadata for a date range.",
+      "Run a local-only phishing metadata scan without Notion sync."
+    ],
+    "brandColor": "#2563EB"
+  }
+}

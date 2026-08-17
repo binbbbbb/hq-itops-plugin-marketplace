@@ -1,0 +1,10 @@
+{
+  "name": "api-token-automation",
+  "version": "1.0.0",
+  "description": "Refresh Bearer tokens for the fixed Postman automation targets.",
+  "author": {
+    "name": "HQ ITOps"
+  },
+  "keywords": ["postman", "bearer-token", "api", "automation"],
+  "skills": ["./skills/"]
+}

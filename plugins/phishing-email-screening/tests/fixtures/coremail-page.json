@@ -1,0 +1,24 @@
+{
+  "totalRecords": 1,
+  "records": [
+    {
+      "[t": "2026-08-05 08:45:06",
+      "from": "example@huaqin.com",
+      "fromdn": "1/1000000000/example",
+      "fromou": "10000002/10000020",
+      "mid": "fixture-message-id",
+      "subject": "会议提醒",
+      "tid": "fixture-thread-id",
+      "to": "example@huaqin.com",
+      "todn": "1/1000000000/example",
+      "toou": "10000002/10000020",
+      "serverName": "app",
+      "serverIP": "10.11.72.126",
+      "time": "2026-08-05 08:45:06",
+      "flag": "Recent",
+      "fromOU": "示例组织",
+      "toOU": "示例组织",
+      "status": "未读"
+    }
+  ]
+}

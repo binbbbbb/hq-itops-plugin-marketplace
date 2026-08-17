@@ -1,0 +1,32 @@
+{
+  "name": "hq-itops-plugin-marketplace",
+  "interface": {
+    "displayName": "HQ ITOps Plugin Marketplace"
+  },
+  "plugins": [
+    {
+      "name": "phishing-email-screening",
+      "source": {
+        "source": "local",
+        "path": "./plugins/phishing-email-screening"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    },
+    {
+      "name": "api-token-automation",
+      "source": {
+        "source": "local",
+        "path": "./plugins/api-token-automation"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Developer Tools"
+    }
+  ]
+}
