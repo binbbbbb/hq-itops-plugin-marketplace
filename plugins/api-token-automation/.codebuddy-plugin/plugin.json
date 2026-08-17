@@ -1,11 +1,11 @@
 {
   "name": "api-token-automation",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Refresh Bearer tokens for the fixed Postman automation targets.",
   "author": {
     "name": "HQ ITOps"
   },
   "repository": "https://github.com/binbbbbb/hq-itops-plugin-marketplace",
   "keywords": ["postman", "bearer-token", "api", "automation"],
-  "skills": ["./skills/"]
+  "skills": ["./skills/refresh-postman-bearer-tokens/"]
 }

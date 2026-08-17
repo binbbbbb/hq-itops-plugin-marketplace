@@ -1,0 +1,4 @@
+interface:
+  display_name: "Build Marketplace Plugins"
+  short_description: "Build and validate dual-platform marketplace plugins"
+  default_prompt: "Use $build-marketplace-plugins to build or update a Codex and CodeBuddy marketplace plugin."

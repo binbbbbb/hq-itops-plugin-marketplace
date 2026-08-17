@@ -59,16 +59,28 @@ for (const entry of catalog.plugins) {
   if (!codexManifest.description || !codeBuddyManifest.description || !codexManifest.author?.name || !codeBuddyManifest.author?.name) {
     fail(`${entry.name}: incomplete plugin metadata`);
   }
-  if (codexManifest.skills !== "./skills/" || !Array.isArray(codeBuddyManifest.skills)
-    || !codeBuddyManifest.skills.length || codeBuddyManifest.skills.some((value) => !value.startsWith("./skills/"))) {
-    fail(`${entry.name}: both manifests must use the local skills/ source`);
+  if (codexManifest.skills !== "./skills/") fail(`${entry.name}: Codex must use the string component path ./skills/`);
+  if (!Array.isArray(codeBuddyManifest.skills) || !codeBuddyManifest.skills.length) {
+    fail(`${entry.name}: CodeBuddy skills must be a non-empty array of direct Skill directories`);
   }
-  for (const skillPath of codeBuddyManifest.skills) {
-    const resolved = path.resolve(pluginRoot, skillPath);
-    if (!resolved.startsWith(`${path.resolve(pluginRoot, "skills")}${path.sep}`) && resolved !== path.resolve(pluginRoot, "skills")) {
-      fail(`${entry.name}: unsafe CodeBuddy skill path ${skillPath}`);
-    } else if (!fs.existsSync(resolved)) {
-      fail(`${entry.name}: missing CodeBuddy skill path ${skillPath}`);
+  const skillRoot = path.resolve(pluginRoot, "skills");
+  if (!fs.existsSync(skillRoot)) {
+    fail(`${entry.name}: missing skills/ component directory`);
+  } else {
+    const skillDirectories = fs.readdirSync(skillRoot, { withFileTypes: true })
+      .filter((item) => item.isDirectory());
+    if (!skillDirectories.length) fail(`${entry.name}: skills/ contains no skill directories`);
+    for (const skillDirectory of skillDirectories) {
+      if (!fs.existsSync(path.join(skillRoot, skillDirectory.name, "SKILL.md"))) {
+        fail(`${entry.name}: skills/${skillDirectory.name} must directly contain SKILL.md`);
+      }
+    }
+    if (Array.isArray(codeBuddyManifest.skills)) {
+      const expectedPaths = skillDirectories.map((item) => `./skills/${item.name}/`).sort();
+      const declaredPaths = [...codeBuddyManifest.skills].sort();
+      if (JSON.stringify(declaredPaths) !== JSON.stringify(expectedPaths)) {
+        fail(`${entry.name}: CodeBuddy skills must enumerate each direct skills/<name>/ directory`);
+      }
     }
   }
   if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.test(codexManifest.version)) {
@@ -77,7 +89,9 @@ for (const entry of catalog.plugins) {
   if (!Array.isArray(codexManifest.interface?.defaultPrompt) || codexManifest.interface.defaultPrompt.length > 3) {
     fail(`${entry.name}: invalid Codex defaultPrompt`);
   }
-  const skillFiles = walkFiles(path.join(pluginRoot, "skills")).filter((file) => path.basename(file) === "SKILL.md");
+  const skillFiles = fs.existsSync(skillRoot)
+    ? walkFiles(skillRoot).filter((file) => path.basename(file) === "SKILL.md")
+    : [];
   if (!skillFiles.length) fail(`${entry.name}: no SKILL.md found`);
   for (const skillFile of skillFiles) {
     const contents = fs.readFileSync(skillFile, "utf8");
