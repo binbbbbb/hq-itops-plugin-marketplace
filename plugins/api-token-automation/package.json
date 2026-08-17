@@ -1,0 +1,13 @@
+{
+  "name": "api-token-automation",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Refresh Bearer tokens for the fixed Postman automation targets.",
+  "scripts": {
+    "update": "node update-postman-bearer-token.js",
+    "check": "node --check update-postman-bearer-token.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

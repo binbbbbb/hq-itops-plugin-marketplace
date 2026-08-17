@@ -1,0 +1,17 @@
+{
+  "name": "hq-itops-plugin-marketplace",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "generate": "node scripts/generate-marketplaces.mjs",
+    "generate:check": "node scripts/generate-marketplaces.mjs --check",
+    "validate": "node scripts/validate-marketplace.mjs",
+    "test:phishing": "npm test --prefix plugins/phishing-email-screening",
+    "test:api-token": "npm run check --prefix plugins/api-token-automation",
+    "test": "npm run generate:check && npm run validate && npm run test:phishing && npm run test:api-token"
+  }
+}

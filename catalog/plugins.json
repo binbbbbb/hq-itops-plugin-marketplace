@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "plugins": [
+    {
+      "name": "phishing-email-screening",
+      "category": "Productivity",
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      }
+    },
+    {
+      "name": "api-token-automation",
+      "category": "Developer Tools",
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      }
+    }
+  ]
+}

@@ -5,6 +5,7 @@
   "author": {
     "name": "HQ ITOps"
   },
+  "repository": "https://github.com/binbbbbb/hq-itops-plugin-marketplace",
   "keywords": ["postman", "bearer-token", "api", "automation"],
   "skills": ["./skills/"]
 }

@@ -1,6 +1,10 @@
 postman-api-key.txt
 *.postman_collection.json
 *.bak-*
-*.tmp
-*.log
+logs/
+reports/
+work/
 node_modules/
+.workbuddy/
+*.log
+*.tmp
