@@ -13,14 +13,14 @@ function ok(stdout = "") {
   return { ok: true, code: 0, stdout, stderr: "" };
 }
 
-test("Windows Python 发现优先使用显式环境变量和 py 启动器", () => {
+test("Windows Python 发现优先使用显式环境变量和 PATH 中的 python", () => {
   const candidates = pythonCandidates({
     platform: "win32",
     env: { PHISHING_EMAIL_SCREENING_PYTHON: "D:\\Tools\\python.exe" },
   });
   assert.deepEqual(candidates.slice(0, 2), [
     { command: "D:\\Tools\\python.exe", args: [], source: "environment" },
-    { command: "py", args: ["-3"], source: "launcher" },
+    { command: "python", args: [], source: "path" },
   ]);
 });
 

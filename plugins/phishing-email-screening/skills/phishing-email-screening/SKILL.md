@@ -44,7 +44,7 @@ If dates are omitted, allow the script to use the current Asia/Shanghai date. Tr
 
 ## Handle failures
 
-- Exit code `2`: report that the Coremail session expired and ask the user to update `config/config.local.json` locally. Never request the Cookie in chat. If Notion preflight was healthy, add an authentication-failure execution record using the same run-ID upsert and latest-three retention rule; otherwise keep only the local failure log.
+- Exit code `2`: report that Coremail automatic authentication failed and ask the user to check the locally configured username/password, Chrome, and network. Do not direct the user to maintain a static Cookie when credentials are configured, and never request credentials or Cookie values in chat. If Notion preflight was healthy, add an authentication-failure execution record using the same run-ID upsert and latest-three retention rule; otherwise keep only the local failure log.
 - Exit code `3`: identify the missing or invalid local scan configuration or Python runtime setup failure without exposing configured values. Suggest `npm run setup` and `npm run doctor` for runtime failures. A separate exit code 3 from `npm run mcp-config` only disables Notion publishing.
 - Exit code `4`: preserve and report the local report path, then explain that Notion synchronization failed and may be partial.
 - Exit code `5`: report the Coremail or data error and local log path.

@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { ensurePythonRuntime, inspectPythonRuntime, runCommand } from "../src/python-runtime.js";
+import { parseAuthHelperDiagnostic, stageBundledAuthHelper } from "../src/coremail-auth.js";
 
 async function main() {
   const action = process.argv[2];
@@ -22,10 +23,20 @@ async function main() {
 
   const importCheck = await runCommand(runtime.pythonExecutable, [
     "-c",
-    "from playwright.sync_api import sync_playwright; print('ok')",
+    "from playwright.sync_api import sync_playwright; p=sync_playwright().start(); print('ok'); p.stop()",
   ], { timeoutMs: 20_000 });
   if (!importCheck.ok) {
     console.error("Playwright 模块导入失败，请重新运行 npm run setup。");
+    return 1;
+  }
+  const helperPath = stageBundledAuthHelper(runtime);
+  const helperCheck = await runCommand(runtime.pythonExecutable, [helperPath], {
+    input: "{}",
+    timeoutMs: 20_000,
+  });
+  const helperDiagnostic = parseAuthHelperDiagnostic(helperCheck.stderr);
+  if (helperCheck.code !== 1 || helperDiagnostic.code !== "AUTH_INPUT_INVALID") {
+    console.error(`自动登录帮助程序自检失败（${helperDiagnostic.code}）。`);
     return 1;
   }
   console.log(`运行环境健康：Python ${runtime.details.python.join(".")}，Playwright ${runtime.details.playwright}。`);

@@ -16,7 +16,7 @@
 ## 配置
 
 1. 将 `config/config.example.json` 复制为 `config/config.local.json`。
-2. 在本机配置 `coremail.auth.username` 和 `coremail.auth.password`，或使用 `COREMAIL_USERNAME`、`COREMAIL_PASSWORD` 环境变量。
+2. 在本机配置 `coremail.auth.username` 和 `coremail.auth.password`，或使用 `COREMAIL_USERNAME`、`COREMAIL_PASSWORD` 环境变量。保持 `coremail.auth.mode` 为 `auto`；插件会优先用账号密码自动登录并生成本次请求所需的 Cookie，不要求用户维护静态 Cookie。旧配置若写成 `cookie` 但没有提供静态 Cookie，只要账号密码完整，也会自动迁移到账号密码登录。
 3. 在 `classification.localAllowlist.emails` 和 `classification.localAllowlist.domains` 中维护本地白名单；域名可带或不带开头的 `@`，匹配时会统一为小写。
 4. 在 `classification.cacSubjectBlacklist` 中维护 CAC 主题关键词。任一关键词命中即判为“可疑 / 高置信”。
 5. 如需发布到 Notion，仅配置 `notion.resultsPageId` 和 `notion.executionLogPageId` 两个不同的普通页面 ID，不需要 Notion Token。

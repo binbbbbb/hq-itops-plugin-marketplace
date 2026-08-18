@@ -12,7 +12,7 @@ const DEFAULTS = Object.freeze({
     timeoutMs: 20000,
     pageSize: 100,
     auth: {
-      mode: "cookie",
+      mode: "auto",
       scriptPath: "scripts/get_coremail_cookie.py",
       loginPath: "/webadmin/",
       browserChannel: "chrome",
@@ -52,6 +52,10 @@ function requireNonPlaceholder(value, name) {
   }
 }
 
+function hasConfiguredValue(value) {
+  return Boolean(value) && !/^REPLACE_/i.test(String(value));
+}
+
 function requireStringArray(value, name) {
   if (!Array.isArray(value) || value.some((item) => typeof item !== "string")) {
     throw new ConfigError(`${name} 必须是字符串数组`);
@@ -78,9 +82,25 @@ export function loadConfig({ configPath = DEFAULT_CONFIG_PATH } = {}) {
   config.coremail.auth.username = process.env.COREMAIL_USERNAME || config.coremail.auth.username;
   config.coremail.auth.password = process.env.COREMAIL_PASSWORD || config.coremail.auth.password;
 
-  if (!['cookie', 'playwright'].includes(config.coremail.auth.mode)) {
-    throw new ConfigError("coremail.auth.mode 必须是 cookie 或 playwright");
+  if (!["auto", "cookie", "playwright"].includes(config.coremail.auth.mode)) {
+    throw new ConfigError("coremail.auth.mode 必须是 auto、cookie 或 playwright");
   }
+
+  const hasCookie = hasConfiguredValue(config.coremail.cookie);
+  const hasUsername = hasConfiguredValue(config.coremail.auth.username);
+  const hasPassword = hasConfiguredValue(config.coremail.auth.password);
+  const hasCredentials = hasUsername && hasPassword;
+
+  if (config.coremail.auth.mode === "auto") {
+    if (hasCredentials) config.coremail.auth.mode = "playwright";
+    else if (hasCookie) config.coremail.auth.mode = "cookie";
+    else throw new ConfigError("缺少 Coremail 自动登录凭据或可用 Cookie");
+  } else if (config.coremail.auth.mode === "cookie" && !hasCookie && hasCredentials) {
+    // Compatibility migration for local files that selected cookie mode before
+    // automatic credential-based authentication became the default.
+    config.coremail.auth.mode = "playwright";
+  }
+
   if (config.coremail.auth.mode === "cookie") {
     requireNonPlaceholder(config.coremail.cookie, "coremail.cookie / COREMAIL_COOKIE");
   } else {

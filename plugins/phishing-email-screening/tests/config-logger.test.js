@@ -87,3 +87,45 @@ test("Playwright 自动登录模式不要求静态 Cookie", () => {
     fs.rmSync(tempPath, { force: true });
   }
 });
+
+test("auto 模式优先使用账号密码生成新 Cookie", () => {
+  const tempPath = path.resolve("tests", `.tmp-auto-auth-config-${process.pid}.json`);
+  fs.writeFileSync(tempPath, JSON.stringify({
+    coremail: {
+      baseUrl: "https://157.255.37.89",
+      cookie: "JSESSIONID=stale; Coremail.sid=STALE_TEST_SID",
+      auth: {
+        mode: "auto",
+        username: "test-user",
+        password: "test-password",
+      },
+    },
+  }), "utf8");
+  try {
+    const config = loadConfig({ configPath: tempPath });
+    assert.equal(config.coremail.auth.mode, "playwright");
+  } finally {
+    fs.rmSync(tempPath, { force: true });
+  }
+});
+
+test("旧 cookie 模式缺少静态 Cookie 时自动迁移到账号密码登录", () => {
+  const tempPath = path.resolve("tests", `.tmp-legacy-auth-config-${process.pid}.json`);
+  fs.writeFileSync(tempPath, JSON.stringify({
+    coremail: {
+      baseUrl: "https://157.255.37.89",
+      auth: {
+        mode: "cookie",
+        username: "test-user",
+        password: "test-password",
+      },
+    },
+  }), "utf8");
+  try {
+    const config = loadConfig({ configPath: tempPath });
+    assert.equal(config.coremail.auth.mode, "playwright");
+    assert.equal(config.coremail.cookie, undefined);
+  } finally {
+    fs.rmSync(tempPath, { force: true });
+  }
+});

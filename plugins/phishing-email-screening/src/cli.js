@@ -103,7 +103,8 @@ async function run() {
   } catch (error) {
     logger.error(`${error.code ?? "ERROR"}: ${error.message}`);
     if (error instanceof AuthExpiredError) {
-      console.error("Coremail 鉴权失败。自动登录模式请检查本机凭据、Chrome 和网络；静态 Cookie 模式请在本机更新 Cookie。不要在 Agent 对话中粘贴凭据或 Cookie。");
+      console.error("Coremail 自动鉴权失败。请检查本机配置的账号密码、Chrome 和网络。插件会根据账号密码生成请求所需的 Cookie，不要在 Agent 对话中粘贴凭据或 Cookie。");
+      if (error.diagnosticCode) console.error(`诊断：${error.message}（${error.diagnosticCode}）`);
     } else {
       console.error(error.message);
     }

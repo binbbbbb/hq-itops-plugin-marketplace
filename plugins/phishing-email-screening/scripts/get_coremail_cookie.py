@@ -17,6 +17,14 @@ COOKIE_NAMES = ("JSESSIONID", "Coremail", "Coremail.sid")
 ALLOWED_HOST = "157.255.37.89"
 
 
+class AuthenticationFlowError(RuntimeError):
+    """A safe, machine-readable failure from the browser login flow."""
+
+    def __init__(self, code: str, message: str) -> None:
+        super().__init__(message)
+        self.code = code
+
+
 def _read_request() -> dict[str, object]:
     try:
         request = json.load(sys.stdin)
@@ -27,11 +35,13 @@ def _read_request() -> dict[str, object]:
     return request
 
 
-def _required_text(request: dict[str, object], name: str) -> str:
+def _required_text(
+    request: dict[str, object], name: str, *, preserve_whitespace: bool = False
+) -> str:
     value = request.get(name)
     if not isinstance(value, str) or not value.strip():
         raise RuntimeError(f"Missing required setting: {name}")
-    return value.strip()
+    return value if preserve_whitespace else value.strip()
 
 
 def get_coremail_cookies(request: dict[str, object]) -> tuple[dict[str, str], str]:
@@ -40,16 +50,24 @@ def get_coremail_cookies(request: dict[str, object]) -> tuple[dict[str, str], st
         from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
         from playwright.sync_api import sync_playwright
     except ImportError as exc:
-        raise RuntimeError(
-            "Python Playwright is not installed. Run: python -m pip install playwright"
+        raise AuthenticationFlowError(
+            "PLAYWRIGHT_IMPORT_FAILED",
+            "Python Playwright is not available",
         ) from exc
 
-    login_url = _required_text(request, "loginUrl")
-    username = _required_text(request, "username")
-    password = _required_text(request, "password")
-    parsed_url = urlparse(login_url)
-    if parsed_url.scheme != "https" or parsed_url.hostname != ALLOWED_HOST:
-        raise RuntimeError("Coremail login URL is outside the allowed host")
+    try:
+        login_url = _required_text(request, "loginUrl")
+        username = _required_text(request, "username")
+        # Passwords are opaque values. Trimming them changes valid credentials.
+        password = _required_text(request, "password", preserve_whitespace=True)
+        parsed_url = urlparse(login_url)
+        if parsed_url.scheme != "https" or parsed_url.hostname != ALLOWED_HOST:
+            raise RuntimeError("Coremail login URL is outside the allowed host")
+    except Exception as exc:
+        raise AuthenticationFlowError(
+            "AUTH_INPUT_INVALID",
+            "Coremail authentication input is invalid",
+        ) from exc
 
     timeout_ms = int(request.get("timeoutMs", 30_000))
     post_login_wait_ms = int(request.get("postLoginWaitMs", 1_000))
@@ -63,17 +81,31 @@ def get_coremail_cookies(request: dict[str, object]) -> tuple[dict[str, str], st
         try:
             browser = playwright.chromium.launch(**launch_options)
         except Exception as exc:
-            raise RuntimeError(
-                "Cannot start the configured Chromium browser. Confirm that it is installed."
+            raise AuthenticationFlowError(
+                "BROWSER_START_FAILED",
+                "Cannot start the configured Chromium browser",
             ) from exc
 
         try:
-            context = browser.new_context(ignore_https_errors=True)
-            page = context.new_page()
-            page.goto(login_url, wait_until="domcontentloaded", timeout=timeout_ms)
-            page.locator('input[name="uid"]').fill(username)
-            page.locator('input[type="password"]').fill(password)
-            page.locator('input[name="submit"]').click()
+            try:
+                context = browser.new_context(ignore_https_errors=True)
+                page = context.new_page()
+                page.goto(login_url, wait_until="domcontentloaded", timeout=timeout_ms)
+            except Exception as exc:
+                raise AuthenticationFlowError(
+                    "LOGIN_PAGE_LOAD_FAILED",
+                    "Cannot load the Coremail login page",
+                ) from exc
+
+            try:
+                page.locator('input[name="uid"]').fill(username)
+                page.locator('input[type="password"]').fill(password)
+                page.locator('input[name="submit"]').click()
+            except Exception as exc:
+                raise AuthenticationFlowError(
+                    "LOGIN_FORM_FAILED",
+                    "Cannot fill or submit the Coremail login form",
+                ) from exc
 
             try:
                 page.wait_for_url(
@@ -82,19 +114,33 @@ def get_coremail_cookies(request: dict[str, object]) -> tuple[dict[str, str], st
                     timeout=timeout_ms,
                 )
             except PlaywrightTimeoutError as exc:
-                raise RuntimeError("Coremail login did not reach WebAdmin") from exc
+                error_locator = page.locator(".errMsg")
+                error_present = bool(
+                    error_locator.count() and error_locator.inner_text().strip()
+                )
+                code = "LOGIN_REJECTED" if error_present else "LOGIN_REDIRECT_TIMEOUT"
+                raise AuthenticationFlowError(
+                    code,
+                    "Coremail login did not reach WebAdmin",
+                ) from exc
 
             page.wait_for_timeout(post_login_wait_ms)
-            cookie_map = {
-                item["name"]: item["value"]
-                for item in context.cookies()
-                if item.get("name") in COOKIE_NAMES and item.get("value")
-            }
+            try:
+                cookie_map = {
+                    item["name"]: item["value"]
+                    for item in context.cookies()
+                    if item.get("name") in COOKIE_NAMES and item.get("value")
+                }
+            except Exception as exc:
+                raise AuthenticationFlowError(
+                    "SESSION_READ_FAILED",
+                    "Cannot read the Coremail browser session",
+                ) from exc
             missing = [name for name in COOKIE_NAMES if name not in cookie_map]
             if missing:
-                raise RuntimeError(
-                    "Coremail login succeeded but required cookies were not issued: "
-                    + ", ".join(missing)
+                raise AuthenticationFlowError(
+                    "SESSION_NOT_ISSUED",
+                    "Coremail login succeeded but required session data was not issued",
                 )
             return cookie_map, page.url
         finally:
@@ -109,7 +155,8 @@ def main() -> int:
         sys.stdout.write("\n")
         return 0
     except Exception as exc:
-        print(f"Coremail automatic login failed: {exc}", file=sys.stderr)
+        diagnostic = {"code": getattr(exc, "code", "AUTH_HELPER_FAILED")}
+        print(json.dumps(diagnostic), file=sys.stderr)
         return 1
 
 

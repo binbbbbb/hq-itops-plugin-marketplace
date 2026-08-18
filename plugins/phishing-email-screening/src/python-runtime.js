@@ -9,6 +9,7 @@ import { ConfigError } from "./errors.js";
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const requirementsPath = path.join(projectRoot, "requirements.lock");
 const REQUIRED_PLAYWRIGHT_VERSION = "1.62.0";
+const RUNTIME_SCHEMA_VERSION = "2";
 const LOCK_WAIT_MS = 120_000;
 const LOCK_STALE_MS = 10 * 60_000;
 const COMMAND_TIMEOUT_MS = 120_000;
@@ -39,9 +40,13 @@ export function pythonCandidates({ env = process.env, platform = process.platfor
   if (env.PHISHING_EMAIL_SCREENING_PYTHON) {
     candidates.push({ command: env.PHISHING_EMAIL_SCREENING_PYTHON, args: [], source: "environment" });
   }
-  if (platform === "win32") candidates.push({ command: "py", args: ["-3"], source: "launcher" });
-  candidates.push({ command: "python3", args: [], source: "path" });
-  candidates.push({ command: "python", args: [], source: "path" });
+  if (platform === "win32") {
+    candidates.push({ command: "python", args: [], source: "path" });
+    candidates.push({ command: "py", args: ["-3"], source: "launcher" });
+  } else {
+    candidates.push({ command: "python3", args: [], source: "path" });
+    candidates.push({ command: "python", args: [], source: "path" });
+  }
   return candidates;
 }
 
@@ -102,7 +107,11 @@ export function runCommand(command, args, {
 
 function runtimePaths(options = {}) {
   const requirements = fs.readFileSync(requirementsPath);
-  const fingerprint = crypto.createHash("sha256").update(requirements).digest("hex").slice(0, 16);
+  const fingerprint = crypto.createHash("sha256")
+    .update(requirements)
+    .update(`\0runtime-schema-${RUNTIME_SCHEMA_VERSION}`)
+    .digest("hex")
+    .slice(0, 16);
   const runtimeDir = path.join(runtimeBaseDir(options), fingerprint);
   const venvDir = path.join(runtimeDir, "venv");
   return {

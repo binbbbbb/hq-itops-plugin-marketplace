@@ -3,7 +3,7 @@
   "coremail": {
     "baseUrl": "https://157.255.37.89",
     "auth": {
-      "mode": "playwright",
+      "mode": "auto",
       "username": "REPLACE_LOCALLY_AND_NEVER_COMMIT",
       "password": "REPLACE_LOCALLY_AND_NEVER_COMMIT",
       "scriptPath": "scripts/get_coremail_cookie.py",
