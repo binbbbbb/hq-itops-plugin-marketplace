@@ -22,41 +22,11 @@ const DEFAULTS = Object.freeze({
       postLoginWaitMs: 1000,
     },
   },
-  notion: {
-    mode: "rest",
-    apiVersion: "2026-03-11",
-    allowlistProperties: {
-      value: "规则值",
-      type: "类型",
-      enabled: "启用",
-      validFrom: "生效时间",
-      validUntil: "失效时间",
-      note: "备注",
-    },
-    resultProperties: {
-      title: "标题",
-      messageId: "邮件 ID",
-      recordType: "记录类型",
-      mailTime: "邮件时间",
-      sender: "发件人",
-      receiver: "收件人",
-      subject: "主题",
-      classification: "分类",
-      confidence: "置信度",
-      reasons: "判断原因",
-      action: "建议动作",
-      fromOrg: "发件组织",
-      toOrg: "收件组织",
-      server: "服务器",
-      scanRange: "扫描范围",
-      runId: "运行 ID",
-      handlingStatus: "处理状态",
-    },
-  },
   classification: {
     internalDomains: [],
     approvedServers: [],
     sensitiveSubjectKeywords: [],
+    cacSubjectBlacklist: [],
     localAllowlist: { emails: [], domains: [] },
   },
 });
@@ -83,7 +53,13 @@ function requireNonPlaceholder(value, name) {
   }
 }
 
-export function loadConfig({ configPath = DEFAULT_CONFIG_PATH, noNotion = false } = {}) {
+function requireStringArray(value, name) {
+  if (!Array.isArray(value) || value.some((item) => typeof item !== "string")) {
+    throw new ConfigError(`${name} 必须是字符串数组`);
+  }
+}
+
+export function loadConfig({ configPath = DEFAULT_CONFIG_PATH } = {}) {
   const resolved = path.resolve(configPath);
   if (!fs.existsSync(resolved)) {
     throw new ConfigError(
@@ -102,15 +78,6 @@ export function loadConfig({ configPath = DEFAULT_CONFIG_PATH, noNotion = false 
   config.coremail.cookie = process.env.COREMAIL_COOKIE || config.coremail.cookie;
   config.coremail.auth.username = process.env.COREMAIL_USERNAME || config.coremail.auth.username;
   config.coremail.auth.password = process.env.COREMAIL_PASSWORD || config.coremail.auth.password;
-  config.notion.token = process.env.NOTION_TOKEN || config.notion.token;
-  config.notion.allowlistDataSourceId =
-    process.env.NOTION_ALLOWLIST_DATA_SOURCE_ID ||
-    config.notion.allowlistDataSourceId ||
-    config.notion.allowlistDatabaseId;
-  config.notion.resultsDataSourceId =
-    process.env.NOTION_RESULTS_DATA_SOURCE_ID ||
-    config.notion.resultsDataSourceId ||
-    config.notion.resultsDatabaseId;
 
   if (!['cookie', 'playwright'].includes(config.coremail.auth.mode)) {
     throw new ConfigError("coremail.auth.mode 必须是 cookie 或 playwright");
@@ -133,18 +100,13 @@ export function loadConfig({ configPath = DEFAULT_CONFIG_PATH, noNotion = false 
     throw new ConfigError("coremail.pageSize 必须是 1 到 500 的整数");
   }
 
-  if (!["rest", "mcp"].includes(config.notion.mode)) {
-    throw new ConfigError("notion.mode 必须是 rest 或 mcp");
+  if (!isPlainObject(config.classification)) throw new ConfigError("classification 必须是对象");
+  if (!isPlainObject(config.classification.localAllowlist)) {
+    throw new ConfigError("classification.localAllowlist 必须是对象");
   }
-  if (config.notion.mode === "mcp") {
-    requireNonPlaceholder(config.notion.allowlistPageId, "notion.allowlistPageId");
-    requireNonPlaceholder(config.notion.resultsPageId, "notion.resultsPageId");
-    requireNonPlaceholder(config.notion.executionLogPageId, "notion.executionLogPageId");
-  } else if (!noNotion) {
-    requireNonPlaceholder(config.notion.token, "notion.token / NOTION_TOKEN");
-    requireNonPlaceholder(config.notion.allowlistDataSourceId, "notion.allowlistDataSourceId");
-    requireNonPlaceholder(config.notion.resultsDataSourceId, "notion.resultsDataSourceId");
-  }
+  requireStringArray(config.classification.localAllowlist.emails, "classification.localAllowlist.emails");
+  requireStringArray(config.classification.localAllowlist.domains, "classification.localAllowlist.domains");
+  requireStringArray(config.classification.cacSubjectBlacklist, "classification.cacSubjectBlacklist");
 
   config.__path = resolved;
   return config;

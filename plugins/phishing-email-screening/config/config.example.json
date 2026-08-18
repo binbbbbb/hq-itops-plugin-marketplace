@@ -19,41 +19,8 @@
     "pageSize": 100
   },
   "notion": {
-    "mode": "mcp",
-    "token": "REPLACE_LOCALLY_AND_NEVER_COMMIT",
-    "apiVersion": "2026-03-11",
-    "allowlistPageId": "REPLACE_WITH_PAGE_ID",
     "resultsPageId": "REPLACE_WITH_PAGE_ID",
-    "executionLogPageId": "REPLACE_WITH_PAGE_ID",
-    "allowlistDataSourceId": "REPLACE_WITH_DATA_SOURCE_ID",
-    "resultsDataSourceId": "REPLACE_WITH_DATA_SOURCE_ID",
-    "allowlistProperties": {
-      "value": "规则值",
-      "type": "类型",
-      "enabled": "启用",
-      "validFrom": "生效时间",
-      "validUntil": "失效时间",
-      "note": "备注"
-    },
-    "resultProperties": {
-      "title": "标题",
-      "messageId": "邮件 ID",
-      "recordType": "记录类型",
-      "mailTime": "邮件时间",
-      "sender": "发件人",
-      "receiver": "收件人",
-      "subject": "主题",
-      "classification": "分类",
-      "confidence": "置信度",
-      "reasons": "判断原因",
-      "action": "建议动作",
-      "fromOrg": "发件组织",
-      "toOrg": "收件组织",
-      "server": "服务器",
-      "scanRange": "扫描范围",
-      "runId": "运行 ID",
-      "handlingStatus": "处理状态"
-    }
+    "executionLogPageId": "REPLACE_WITH_ANOTHER_PAGE_ID"
   },
   "classification": {
     "internalDomains": ["huaqin.com"],
@@ -70,9 +37,29 @@
       "立即转账",
       "工资补贴"
     ],
+    "cacSubjectBlacklist": [
+      "账号异常需验证",
+      "邮箱容量已满",
+      "邮箱即将停用",
+      "密码即将过期",
+      "检测到异地登录",
+      "点击链接解锁",
+      "重新验证邮箱",
+      "企业邮箱升级",
+      "工资补贴申领",
+      "财务付款确认",
+      "修改收款账户",
+      "紧急转账",
+      "电子发票待查收",
+      "共享文件待签收",
+      "快递异常待处理",
+      "会议邀请需登录",
+      "VPN账号到期",
+      "MFA验证失败"
+    ],
     "localAllowlist": {
       "emails": [],
-      "domains": []
+      "domains": ["huaqin.com"]
     }
   }
 }

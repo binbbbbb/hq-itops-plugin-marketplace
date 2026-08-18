@@ -1,8 +1,8 @@
 {
   "name": "phishing-email-screening",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "private": true,
-  "description": "Coremail metadata-based phishing email pre-screening with Notion integration.",
+  "description": "Coremail metadata-based phishing email pre-screening with local allowlists and optional Notion MCP publishing.",
   "type": "module",
   "engines": {
     "node": ">=20"

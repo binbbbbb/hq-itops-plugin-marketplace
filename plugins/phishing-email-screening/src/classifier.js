@@ -59,6 +59,10 @@ export function classifyRecord(record, allowlist, settings = {}) {
   const sender = emailParts(record.sender);
   const internalDomains = (settings.internalDomains ?? []).map((value) => String(value).toLowerCase());
   const keywords = (settings.sensitiveSubjectKeywords ?? []).filter(Boolean);
+  const normalizedSubject = String(record.subject ?? "").toLocaleLowerCase();
+  const cacMatches = [...new Set((settings.cacSubjectBlacklist ?? [])
+    .map((keyword) => String(keyword).trim())
+    .filter((keyword) => keyword && normalizedSubject.includes(keyword.toLocaleLowerCase())))];
   const reasons = [];
   const matchedRules = [];
   const anomalies = [];
@@ -78,10 +82,24 @@ export function classifyRecord(record, allowlist, settings = {}) {
   if (server.conflict) anomalies.push("服务器名称与 IP 白名单映射冲突");
   if (sender && isLookalikeDomain(sender.domain, internalDomains)) anomalies.push("发件域名与内部域名高度相似");
 
-  const sensitiveMatches = keywords.filter((keyword) => record.subject.includes(keyword));
+  const sensitiveMatches = keywords.filter((keyword) => String(record.subject ?? "").includes(keyword));
   const unknownSender = !exactEmail && !domainMatch;
   if (unknownSender && sensitiveMatches.length > 0) {
     anomalies.push(`未知发件人主题包含敏感词：${sensitiveMatches.join("、")}`);
+  }
+
+  if (cacMatches.length > 0) {
+    reasons.push(`主题命中 CAC 黑名单：${cacMatches.join("、")}`);
+    reasons.push(...anomalies);
+    if (exactEmail || domainMatch) reasons.push("即使命中白名单，CAC 黑名单信号仍优先处理");
+    return {
+      classification: CLASSIFICATIONS.SUSPICIOUS,
+      confidence: "高",
+      allowlistStatus: exactEmail ? "精确邮箱命中" : domainMatch ? "域名命中" : "未命中",
+      matchedRules,
+      reasons,
+      recommendedAction: "重点复核，确认前不要操作链接、附件或敏感业务",
+    };
   }
 
   if (anomalies.length > 0) {

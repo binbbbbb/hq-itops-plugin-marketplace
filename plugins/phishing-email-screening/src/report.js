@@ -81,7 +81,7 @@ export function writeReports({ projectRoot, runId, items, summary }) {
     `- 待确认：${summary.counts[CLASSIFICATIONS.PENDING]}`,
     `- 可疑：${summary.counts[CLASSIFICATIONS.SUSPICIOUS]}`,
     "",
-    "> 本报告仅基于邮件元数据和白名单进行初筛，不代表最终安全结论。",
+    "> 本报告仅基于邮件元数据、本地白名单和主题关键词进行初筛，不代表最终安全结论。",
     "",
     `| ${COLUMNS.map(([name]) => name).join(" | ")} |`,
     `| ${COLUMNS.map(() => "---").join(" | ")} |`,

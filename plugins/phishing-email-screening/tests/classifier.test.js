@@ -15,6 +15,7 @@ const settings = {
   internalDomains: ["huaqin.com"],
   approvedServers: [{ name: "app", ip: "10.11.72.126" }],
   sensitiveSubjectKeywords: ["紧急付款"],
+  cacSubjectBlacklist: ["MFA验证失败", "邮箱即将停用"],
 };
 
 test("精确邮箱白名单命中为可信候选", () => {
@@ -54,4 +55,21 @@ test("域名命中必须同时有目录和服务器佐证", () => {
     classifyRecord({ ...base, serverName: "unknown", serverIp: "10.0.0.1" }, allowlist, settings).classification,
     CLASSIFICATIONS.PENDING,
   );
+});
+
+test("CAC 主题黑名单命中后即使在域名白名单中也判为高置信可疑", () => {
+  const result = classifyRecord(
+    { ...base, subject: "通知：mfa验证失败，请立即处理" },
+    makeAllowlist({ domains: ["@HUAQIN.COM"] }),
+    settings,
+  );
+  assert.equal(result.classification, CLASSIFICATIONS.SUSPICIOUS);
+  assert.equal(result.confidence, "高");
+  assert.equal(result.allowlistStatus, "域名命中");
+  assert.match(result.reasons.join("；"), /CAC 黑名单：MFA验证失败/);
+});
+
+test("未命中 CAC 主题黑名单时保持原分类行为", () => {
+  const result = classifyRecord(base, makeAllowlist({ emails: [base.sender] }), settings);
+  assert.equal(result.classification, CLASSIFICATIONS.TRUSTED);
 });
