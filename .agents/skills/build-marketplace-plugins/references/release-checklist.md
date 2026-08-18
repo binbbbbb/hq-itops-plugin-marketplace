@@ -3,7 +3,7 @@
 ## Before committing
 
 - Confirm only intended files changed with `git status --short`.
-- Confirm both plugin manifests have the same version and shared metadata.
+- Confirm both plugin manifests have the same plain `MAJOR.MINOR.PATCH` version and shared metadata, without platform-specific cachebuster metadata.
 - Run `npm run generate` after version or catalog changes.
 - Run `npm run generate:check` and `npm test`.
 - Validate every added or changed Skill.

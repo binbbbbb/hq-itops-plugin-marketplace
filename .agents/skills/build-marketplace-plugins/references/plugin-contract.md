@@ -47,7 +47,9 @@ Generate both marketplace manifests from the catalog and local plugin manifests.
 - Minor: backward-compatible new behavior or capability.
 - Major: incompatible configuration, invocation, output, or dependency changes.
 
-Do not bump unrelated plugin versions. Keep both manifests on the same version in the same change.
+Use a plain `MAJOR.MINOR.PATCH` version for normal marketplace changes and releases. Do not add platform-specific build metadata such as `+codex.<cachebuster>` to either manifest: these plugins are shared by Codex and CodeBuddy, and the same version is user-facing on both platforms. When content changes must be distributed, bump the appropriate semantic version instead of using a cachebuster.
+
+Do not bump unrelated plugin versions. Keep both manifests on the same plain version in the same change.
 
 ## New plugin minimum
 

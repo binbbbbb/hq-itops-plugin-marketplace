@@ -6,7 +6,6 @@
       "mode": "playwright",
       "username": "REPLACE_LOCALLY_AND_NEVER_COMMIT",
       "password": "REPLACE_LOCALLY_AND_NEVER_COMMIT",
-      "pythonCommand": "python",
       "scriptPath": "scripts/get_coremail_cookie.py",
       "loginPath": "/webadmin/",
       "browserChannel": "chrome",

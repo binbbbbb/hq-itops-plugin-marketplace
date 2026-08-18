@@ -13,7 +13,6 @@ const DEFAULTS = Object.freeze({
     pageSize: 100,
     auth: {
       mode: "cookie",
-      pythonCommand: "python",
       scriptPath: "scripts/get_coremail_cookie.py",
       loginPath: "/webadmin/",
       browserChannel: "chrome",
@@ -87,7 +86,6 @@ export function loadConfig({ configPath = DEFAULT_CONFIG_PATH } = {}) {
   } else {
     requireNonPlaceholder(config.coremail.auth.username, "coremail.auth.username / COREMAIL_USERNAME");
     requireNonPlaceholder(config.coremail.auth.password, "coremail.auth.password / COREMAIL_PASSWORD");
-    requireNonPlaceholder(config.coremail.auth.pythonCommand, "coremail.auth.pythonCommand");
     requireNonPlaceholder(config.coremail.auth.scriptPath, "coremail.auth.scriptPath");
     if (!Number.isInteger(config.coremail.auth.timeoutMs) || config.coremail.auth.timeoutMs < 1000) {
       throw new ConfigError("coremail.auth.timeoutMs 必须是不小于 1000 的整数");

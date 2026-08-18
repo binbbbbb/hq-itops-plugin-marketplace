@@ -29,7 +29,7 @@ Run the deterministic project script and summarize its report. Do not reinterpre
 1. Resolve the project root two levels above this skill directory. Do not depend on a user-specific absolute path.
 2. Unless the user requested local-only behavior, run `npm run mcp-config`. Read only its `resultsPageId` and `executionLogPageId`; never read or expose other config values. Treat exit code 3 as a failed preflight, not as a reason to skip the local scan.
 3. Confirm that Notion MCP exposes both page-fetch and page-update capabilities. Fetch `notion://docs/enhanced-markdown-spec` and both configured destination pages. Mark preflight healthy only when the config command and every capability/read check succeed.
-4. Run `npm run scan -- --begin YYYY-MM-DD --end YYYY-MM-DD` from the project root regardless of Notion preflight status. The script always uses the configured local email/domain allowlist and automatically keeps only the latest ten local run records.
+4. Run `npm run scan -- --begin YYYY-MM-DD --end YYYY-MM-DD` from the project root regardless of Notion preflight status. In Playwright authentication mode, the first scan may create a user-scoped plugin venv and install the locked Playwright dependencies; do not install into global Python or write an absolute Python path into shared configuration. The script always uses the configured local email/domain allowlist and automatically keeps only the latest ten local run records.
 5. Read the generated summary and CSV. Keep all rows in local reports, but select only `待确认` and `可疑` rows for optional Notion publishing.
 6. If preflight is unhealthy, stop the Notion workflow here and report the local artifacts plus the concise preflight failure reason.
 7. If preflight is healthy, build one result record containing the run summary and abnormal-results table, and one concise execution-log record.
@@ -45,7 +45,7 @@ If dates are omitted, allow the script to use the current Asia/Shanghai date. Tr
 ## Handle failures
 
 - Exit code `2`: report that the Coremail session expired and ask the user to update `config/config.local.json` locally. Never request the Cookie in chat. If Notion preflight was healthy, add an authentication-failure execution record using the same run-ID upsert and latest-three retention rule; otherwise keep only the local failure log.
-- Exit code `3`: identify the missing or invalid local scan configuration without exposing configured values. A separate exit code 3 from `npm run mcp-config` only disables Notion publishing.
+- Exit code `3`: identify the missing or invalid local scan configuration or Python runtime setup failure without exposing configured values. Suggest `npm run setup` and `npm run doctor` for runtime failures. A separate exit code 3 from `npm run mcp-config` only disables Notion publishing.
 - Exit code `4`: preserve and report the local report path, then explain that Notion synchronization failed and may be partial.
 - Exit code `5`: report the Coremail or data error and local log path.
 

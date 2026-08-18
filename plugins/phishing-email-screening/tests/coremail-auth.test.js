@@ -29,8 +29,10 @@ test("Playwright 模式通过独立帮助脚本获取 Cookie", async () => {
       postLoginWaitMs: 1000,
     },
   }, {
+    ensureRuntime: async () => ({ pythonExecutable: "managed-python" }),
     runHelper: async (options) => {
       received = options.request;
+      assert.equal(options.pythonExecutable, "managed-python");
       return { cookie };
     },
   });
@@ -51,5 +53,8 @@ test("自动登录返回无效 Cookie 时按鉴权失败处理", async () => {
       loginPath: "/webadmin/",
       timeoutMs: 30000,
     },
-  }, { runHelper: async () => ({ cookie: "JSESSIONID=only" }) }), AuthExpiredError);
+  }, {
+    ensureRuntime: async () => ({ pythonExecutable: "managed-python" }),
+    runHelper: async () => ({ cookie: "JSESSIONID=only" }),
+  }), AuthExpiredError);
 });

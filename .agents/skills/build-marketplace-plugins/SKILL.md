@@ -26,7 +26,7 @@ Maintain marketplace plugins from their monorepo sources and keep the Codex and 
 
 1. Make the smallest coherent change in `plugins/<plugin-name>/`.
 2. Keep `.codex-plugin/plugin.json` and `.codebuddy-plugin/plugin.json` aligned for name, version, description, author, repository, keywords, and local Skill source. Use Codex's string `"./skills/"`; for CodeBuddy 2.109.2, enumerate every direct Skill directory in an array such as `["./skills/<skill-name>/"]`.
-3. Bump both manifest versions together for a distributable behavior or metadata change. Apply semantic versioning according to compatibility impact.
+3. Bump both manifest versions together for a distributable behavior or metadata change. Apply semantic versioning according to compatibility impact. Use a plain shared `MAJOR.MINOR.PATCH` version for normal repository changes and releases. Do not add platform-specific build metadata such as `+codex.<cachebuster>` to cross-platform manifests; a real distributable change must receive a normal semantic-version bump instead.
 4. Update or add deterministic plugin tests when behavior changes.
 5. Add a new catalog entry only when introducing a new plugin. Keep catalog names identical to directory and manifest names.
 6. Run `npm run generate` after changing a version or catalog metadata.

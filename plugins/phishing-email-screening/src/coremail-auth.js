@@ -4,15 +4,16 @@ import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { AuthExpiredError, ConfigError } from "./errors.js";
 import { parseCookie } from "./coremail.js";
+import { ensurePythonRuntime } from "./python-runtime.js";
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const MAX_HELPER_OUTPUT = 64 * 1024;
 
-function runCookieHelper({ pythonCommand, scriptPath, request, timeoutMs }) {
+function runCookieHelper({ pythonExecutable, scriptPath, request, timeoutMs }) {
   return new Promise((resolve, reject) => {
     let child;
     try {
-      child = spawn(pythonCommand, [scriptPath], {
+      child = spawn(pythonExecutable, [scriptPath], {
         cwd: projectRoot,
         stdio: ["pipe", "pipe", "pipe"],
         windowsHide: true,
@@ -66,7 +67,11 @@ function runCookieHelper({ pythonCommand, scriptPath, request, timeoutMs }) {
   });
 }
 
-export async function resolveCoremailCookie(config, { runHelper = runCookieHelper } = {}) {
+export async function resolveCoremailCookie(config, {
+  runHelper = runCookieHelper,
+  ensureRuntime = ensurePythonRuntime,
+  reportRuntime = (message) => console.error(message),
+} = {}) {
   const auth = config.auth ?? { mode: "cookie" };
   if (auth.mode === "cookie") {
     parseCookie(config.cookie);
@@ -77,8 +82,9 @@ export async function resolveCoremailCookie(config, { runHelper = runCookieHelpe
   if (!fs.existsSync(scriptPath)) {
     throw new ConfigError(`Coremail 自动登录脚本不存在：${scriptPath}`);
   }
+  const runtime = await ensureRuntime({ report: reportRuntime });
   const result = await runHelper({
-    pythonCommand: auth.pythonCommand,
+    pythonExecutable: runtime.pythonExecutable,
     scriptPath,
     timeoutMs: auth.timeoutMs,
     request: {

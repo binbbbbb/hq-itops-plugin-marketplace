@@ -23,9 +23,28 @@
 
 不要把 Coremail 凭据或 Cookie 提交到版本库或粘贴到 Agent 对话中。`config/config.local.json`、日志、报告和工作文件均被版本控制忽略。
 
+## Python 与 Playwright 运行环境
+
+自动登录模式不使用全局 Python 环境中的 Playwright，也不需要在共享配置中填写 Python 绝对路径。首次扫描时，插件会：
+
+1. 查找 Python 3.9 或更高版本；Windows 优先尝试 `py -3`，然后尝试 `python3` 和 `python`。
+2. 在当前用户的应用数据目录创建版本化的插件专属 venv。
+3. 仅在该 venv 内安装 `requirements.lock` 声明的锁定依赖。
+4. 后续扫描复用已校验的 venv。
+
+可以在首次扫描前主动初始化或检查：
+
+```powershell
+npm run setup
+npm run doctor
+```
+
+企业网络可通过 pip 标准环境变量（例如 `PIP_INDEX_URL`）使用内部镜像。可选的 `PHISHING_EMAIL_SCREENING_PYTHON` 环境变量只用于指定创建 venv 的基础解释器；`PHISHING_EMAIL_SCREENING_RUNTIME_DIR` 可用于覆盖用户级运行时目录。两者都不需要写入 `config.local.json`。
+
 ## 运行与测试
 
 ```powershell
+npm run doctor
 npm run scan -- --begin 2026-08-01 --end 2026-08-05
 npm test
 ```

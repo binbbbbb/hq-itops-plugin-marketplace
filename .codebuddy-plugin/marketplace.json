@@ -9,7 +9,7 @@
       "name": "phishing-email-screening",
       "source": "./plugins/phishing-email-screening",
       "description": "Coremail metadata phishing-email pre-screening with local allowlists and optional Notion MCP publishing.",
-      "version": "2.0.0+codex.20260818060829"
+      "version": "2.1.0"
     },
     {
       "name": "api-token-automation",
