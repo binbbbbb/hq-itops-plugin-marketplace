@@ -16,3 +16,5 @@
 
 # Local agent state
 **/.workbuddy/
+#codebuddy记忆文件
+.codebuddy/memory/
