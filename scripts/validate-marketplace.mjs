@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -20,6 +21,21 @@ function walkFiles(targetPath) {
     const child = path.join(targetPath, entry.name);
     return entry.isDirectory() ? walkFiles(child) : [child];
   });
+}
+
+function listTrackedFiles() {
+  try {
+    return execFileSync("git", ["ls-files", "-z"], { cwd: root, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 })
+      .split("\0")
+      .filter(Boolean);
+  } catch {
+    return null;
+  }
+}
+
+const trackedFiles = listTrackedFiles();
+if (trackedFiles === null) {
+  console.warn("git ls-files unavailable; forbidden-file check falls back to scanning the filesystem.");
 }
 
 if (catalog.schemaVersion !== 1 || !Array.isArray(catalog.plugins)) {
@@ -99,8 +115,12 @@ for (const entry of catalog.plugins) {
       fail(`${entry.name}: invalid Skill frontmatter in ${path.relative(root, skillFile)}`);
     }
   }
-  for (const file of walkFiles(pluginRoot)) {
-    const relative = path.relative(pluginRoot, file).replaceAll("\\", "/").toLowerCase();
+  const pluginPrefix = `plugins/${entry.name}/`;
+  const packagedPaths = trackedFiles === null
+    ? walkFiles(pluginRoot).map((file) => path.relative(pluginRoot, file).replaceAll("\\", "/"))
+    : trackedFiles.filter((file) => file.startsWith(pluginPrefix)).map((file) => file.slice(pluginPrefix.length));
+  for (const packagedPath of packagedPaths) {
+    const relative = packagedPath.toLowerCase();
     if (/(^|\/)(config\.local\.json|postman-api-key\.txt)$/.test(relative)
       || /(^|\/)(logs|reports|work|node_modules|\.git|\.workbuddy)(\/|$)/.test(relative)
       || relative.endsWith(".postman_collection.json")
