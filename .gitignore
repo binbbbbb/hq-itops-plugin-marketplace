@@ -1,4 +1,4 @@
-# Local secrets
+# 本地配置及密钥
 **/config/config.local.json
 **/postman-api-key.txt
 
