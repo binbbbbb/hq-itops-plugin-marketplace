@@ -1,0 +1,35 @@
+{
+  "name": "server-login-permission-application",
+  "version": "1.0.0",
+  "description": "Interactive natural-language workflow for validated Zeus server-login permission applications.",
+  "author": {
+    "name": "HQ ITOps"
+  },
+  "repository": "https://github.com/binbbbbb/hq-itops-plugin-marketplace",
+  "keywords": [
+    "zeus",
+    "server-login",
+    "permission",
+    "workflow",
+    "it-service"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Server Login Permission Application",
+    "shortDescription": "Create validated server-login permission tickets",
+    "longDescription": "Turn natural-language requests into validated Zeus server-login permission applications with guided candidate selection and an explicit second confirmation before submission.",
+    "developerName": "HQ ITOps",
+    "category": "Productivity",
+    "capabilities": [
+      "Interactive",
+      "Read",
+      "Write"
+    ],
+    "defaultPrompt": [
+      "申请服务器登录权限。",
+      "帮我为指定服务器和人员提交登录权限工单。"
+    ],
+    "brandColor": "#2563EB"
+  }
+}
+

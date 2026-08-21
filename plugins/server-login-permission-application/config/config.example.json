@@ -1,0 +1,6 @@
+{
+  "api_base": "https://zeusapi.huaqin.com",
+  "token_sign": "replace-with-local-secret",
+  "current_badge": ""
+}
+

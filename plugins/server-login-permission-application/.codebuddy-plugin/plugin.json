@@ -1,0 +1,20 @@
+{
+  "name": "server-login-permission-application",
+  "version": "1.0.0",
+  "description": "Interactive natural-language workflow for validated Zeus server-login permission applications.",
+  "author": {
+    "name": "HQ ITOps"
+  },
+  "repository": "https://github.com/binbbbbb/hq-itops-plugin-marketplace",
+  "keywords": [
+    "zeus",
+    "server-login",
+    "permission",
+    "workflow",
+    "it-service"
+  ],
+  "skills": [
+    "./skills/server-login-permission-application/"
+  ]
+}
+

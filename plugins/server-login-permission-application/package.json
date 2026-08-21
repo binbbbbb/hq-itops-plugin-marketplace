@@ -1,0 +1,14 @@
+{
+  "name": "server-login-permission-application",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Validated Zeus server-login permission application workflow.",
+  "scripts": {
+    "test": "node tests/run-all.js",
+    "check": "node --check scripts/runtime-cli.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
