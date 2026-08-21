@@ -2,8 +2,7 @@ export const EXIT_CODES = Object.freeze({
   OK: 0,
   AUTH_EXPIRED: 2,
   CONFIG: 3,
-  NOTION: 4,
-  DATA: 5,
+  DATA: 4,
 });
 
 export class AppError extends Error {
@@ -26,12 +25,5 @@ export class ConfigError extends AppError {
   constructor(message, options = {}) {
     super(message, { ...options, code: "CONFIG_ERROR", exitCode: EXIT_CODES.CONFIG });
     this.name = "ConfigError";
-  }
-}
-
-export class NotionError extends AppError {
-  constructor(message, options = {}) {
-    super(message, { ...options, code: "NOTION_ERROR", exitCode: EXIT_CODES.NOTION });
-    this.name = "NotionError";
   }
 }

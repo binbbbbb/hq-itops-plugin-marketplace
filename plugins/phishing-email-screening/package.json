@@ -1,8 +1,8 @@
 {
   "name": "phishing-email-screening",
-  "version": "2.2.1",
+  "version": "3.0.0",
   "private": true,
-  "description": "Coremail metadata-based phishing email pre-screening with local allowlists and optional Notion MCP publishing.",
+  "description": "Local Coremail metadata-based phishing email pre-screening with email and domain allowlists.",
   "type": "module",
   "engines": {
     "node": ">=20"
@@ -12,7 +12,6 @@
     "setup": "node scripts/runtime-cli.js setup",
     "doctor": "node scripts/runtime-cli.js doctor",
     "check:cookie-helper": "node --check scripts/runtime-cli.js",
-    "mcp-config": "node src/show-mcp-config.js",
     "test": "node tests/run-all.js",
     "check": "node --check src/cli.js"
   }

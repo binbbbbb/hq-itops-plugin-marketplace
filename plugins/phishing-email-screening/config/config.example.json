@@ -17,10 +17,6 @@
     "timeoutMs": 20000,
     "pageSize": 100
   },
-  "notion": {
-    "resultsPageId": "REPLACE_WITH_PAGE_ID",
-    "executionLogPageId": "REPLACE_WITH_ANOTHER_PAGE_ID"
-  },
   "classification": {
     "internalDomains": ["huaqin.com"],
     "approvedServers": [

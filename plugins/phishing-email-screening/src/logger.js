@@ -3,7 +3,7 @@ import path from "node:path";
 
 export function redact(text) {
   return String(text ?? "")
-    .replace(/(JSESSIONID|Coremail(?:\.sid)?|NOTION_TOKEN)=[^;\s]+/gi, (_match, name) => `${name}=[REDACTED]`)
+    .replace(/(JSESSIONID|Coremail(?:\.sid)?)=[^;\s]+/gi, (_match, name) => `${name}=[REDACTED]`)
     .replace(/Bearer\s+[A-Za-z0-9._-]+/gi, "Bearer [REDACTED]")
     .replace(/~[A-Za-z0-9_-]{12,}~?/g, "~[REDACTED]~");
 }

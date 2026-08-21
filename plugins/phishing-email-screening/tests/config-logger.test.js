@@ -5,7 +5,6 @@ import path from "node:path";
 import { loadConfig, validateDateRange } from "../src/config.js";
 import { redact } from "../src/logger.js";
 import { makeAllowlist } from "../src/classifier.js";
-import { readMcpConfig } from "../src/show-mcp-config.js";
 
 test("日期范围校验包含正确顺序和真实日期", () => {
   assert.deepEqual(validateDateRange("2026-08-01", "2026-08-05"), { begin: "2026-08-01", end: "2026-08-05" });
@@ -19,7 +18,7 @@ test("日志脱敏不会保留 Cookie、sid 或 Bearer token", () => {
   assert.match(output, /\[REDACTED\]/);
 });
 
-test("扫描配置只使用本地邮箱和域名白名单且不要求 Notion", () => {
+test("扫描配置只使用本地邮箱和域名白名单", () => {
   const tempPath = path.resolve("tests", `.tmp-local-config-${process.pid}.json`);
   fs.writeFileSync(tempPath, JSON.stringify({
     coremail: {
@@ -41,29 +40,6 @@ test("扫描配置只使用本地邮箱和域名白名单且不要求 Notion", (
   assert.equal(allowlist.domains.has("partner.com"), true);
   assert.deepEqual(config.classification.cacSubjectBlacklist, ["本地 CAC 主题"]);
   fs.rmSync(tempPath, { force: true });
-});
-
-test("MCP 页面配置仅返回不同的结果页和执行日志页", () => {
-  const tempPath = path.resolve("tests", `.tmp-mcp-config-${process.pid}.json`);
-  fs.writeFileSync(tempPath, JSON.stringify({
-    notion: { resultsPageId: "results-page", executionLogPageId: "log-page" },
-  }), "utf8");
-  try {
-    assert.deepEqual(readMcpConfig(tempPath), {
-      resultsPageId: "results-page",
-      executionLogPageId: "log-page",
-    });
-    fs.writeFileSync(tempPath, JSON.stringify({
-      notion: { resultsPageId: "same-page", executionLogPageId: "same-page" },
-    }), "utf8");
-    assert.throws(() => readMcpConfig(tempPath), /不能使用同一个页面 ID/);
-    fs.writeFileSync(tempPath, JSON.stringify({
-      notion: { resultsPageId: "REPLACE_WITH_PAGE_ID", executionLogPageId: "log-page" },
-    }), "utf8");
-    assert.throws(() => readMcpConfig(tempPath), /缺少有效配置/);
-  } finally {
-    fs.rmSync(tempPath, { force: true });
-  }
 });
 
 test("Playwright 自动登录模式不要求静态 Cookie", () => {

@@ -1,7 +1,7 @@
 {
   "name": "phishing-email-screening",
-  "version": "2.2.1",
-  "description": "Coremail metadata phishing-email pre-screening with local allowlists and optional Notion MCP publishing.",
+  "version": "3.0.0",
+  "description": "Local Coremail metadata phishing-email pre-screening with email and domain allowlists.",
   "author": {
     "name": "Phishing Email Screening Maintainers"
   },
@@ -10,7 +10,6 @@
     "phishing",
     "email-security",
     "coremail",
-    "notion",
     "screening"
   ],
   "skills": [

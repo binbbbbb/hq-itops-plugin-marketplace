@@ -1,7 +1,7 @@
 {
   "name": "phishing-email-screening",
-  "version": "2.2.1",
-  "description": "Coremail metadata phishing-email pre-screening with local allowlists and optional Notion MCP publishing.",
+  "version": "3.0.0",
+  "description": "Local Coremail metadata phishing-email pre-screening with email and domain allowlists.",
   "author": {
     "name": "Phishing Email Screening Maintainers"
   },
@@ -10,14 +10,13 @@
     "phishing",
     "email-security",
     "coremail",
-    "notion",
     "screening"
   ],
   "skills": "./skills/",
   "interface": {
     "displayName": "Phishing Email Screening",
     "shortDescription": "Screen Coremail metadata for suspicious email",
-    "longDescription": "Run the fixed Coremail metadata pre-screening workflow with local email and domain allowlists, then publish abnormal findings only after configured Notion pages and MCP capabilities pass preflight checks.",
+    "longDescription": "Run the fixed Coremail metadata pre-screening workflow with local email and domain allowlists, then generate local Markdown, CSV, and JSON reports.",
     "developerName": "Phishing Email Screening Maintainers",
     "category": "Productivity",
     "capabilities": [
@@ -28,7 +27,7 @@
     "defaultPrompt": [
       "Scan today's company email metadata for phishing risk.",
       "Screen company email metadata for a date range.",
-      "Run a local-only phishing metadata scan without Notion sync."
+      "Generate a local phishing metadata screening report."
     ],
     "brandColor": "#2563EB"
   }
