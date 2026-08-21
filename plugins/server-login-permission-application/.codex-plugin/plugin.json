@@ -1,6 +1,6 @@
 {
   "name": "server-login-permission-application",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Interactive natural-language workflow for validated Zeus server-login permission applications.",
   "author": {
     "name": "HQ ITOps"
@@ -32,4 +32,3 @@
     "brandColor": "#2563EB"
   }
 }
-

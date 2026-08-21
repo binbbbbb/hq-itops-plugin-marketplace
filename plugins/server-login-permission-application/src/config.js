@@ -42,7 +42,7 @@ export function loadConfig({ env = process.env, configPath = path.join(pluginRoo
 }
 
 function badgeFromInstallPath(candidate) {
-  const parts = path.resolve(candidate).split(path.sep);
+  const parts = path.resolve(candidate).split(/[\\/]+/);
   const index = parts.findIndex((part) => part.toLowerCase() === ".codebuddy" || part.toLowerCase() === ".codex");
   return index > 0 ? parts[index - 1] : "";
 }
