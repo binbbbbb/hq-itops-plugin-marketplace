@@ -51,3 +51,31 @@ test("asset pagination supports legacy object responses", async () => {
   assert.deepEqual(result.items.map((item) => item.host_name), ["a", "b", "c"]);
   assert.equal(result.truncated, false);
 });
+
+test("global asset search omits system_id and preserves asset field/system metadata", async () => {
+  let assetUrl;
+  const fetchImpl = async (url) => {
+    if (String(url).includes("/api/token")) return response({ code: 100000, data: { access_token: "test-token" } });
+    assetUrl = new URL(url);
+    return response({ code: 100000, data: [{
+      id: 913,
+      host_name: "srv-01",
+      field_id: 57,
+      field_name: "物流领域",
+      system_id: 10,
+      system_name: "物流管理系统"
+    }] });
+  };
+  const client = new ZeusClient({ apiBase: "https://zeusapi.huaqin.com", tokenSign: "test-sign", badge: "100001", fetchImpl });
+  const result = await client.listAssets({ keyword: "srv-01" });
+  assert.equal(assetUrl.searchParams.has("system_id"), false);
+  assert.deepEqual(result.items[0], {
+    id: 913,
+    host_name: "srv-01",
+    ops_resource_name: "",
+    system_id: 10,
+    system_name: "物流管理系统",
+    field_id: 57,
+    field_name: "物流领域"
+  });
+});

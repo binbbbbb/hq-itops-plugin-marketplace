@@ -44,7 +44,9 @@ function normalizeAssets(data) {
     host_name: String(asset.host_name ?? asset.ops_resource_name ?? asset.name ?? ""),
     ops_resource_name: String(asset.ops_resource_name ?? ""),
     system_id: asset.system_id == null ? undefined : Number(asset.system_id),
-    field_id: asset.field_id == null ? undefined : Number(asset.field_id)
+    system_name: String(asset.system_name ?? ""),
+    field_id: asset.field_id == null ? undefined : Number(asset.field_id),
+    field_name: String(asset.field_name ?? "")
   }));
 }
 
@@ -118,7 +120,7 @@ export class ZeusClient {
     return { items: collected, truncated };
   }
 
-  async listAssets({ systemId, keyword = "", pageSize = 200, maxPages = 20 }) {
+  async listAssets({ systemId, keyword = "", pageSize = 200, maxPages = 20 } = {}) {
     const collected = [];
     let truncated = false;
     for (let page = 1; page <= maxPages; page += 1) {

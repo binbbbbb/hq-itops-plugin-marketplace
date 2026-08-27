@@ -1,6 +1,6 @@
 {
   "name": "server-login-permission-application",
-  "version": "1.0.1",
+  "version": "1.2.0",
   "description": "Interactive natural-language workflow for validated Zeus server-login permission applications.",
   "author": {
     "name": "HQ ITOps"
@@ -14,6 +14,7 @@
     "it-service"
   ],
   "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
   "interface": {
     "displayName": "Server Login Permission Application",
     "shortDescription": "Create validated server-login permission tickets",

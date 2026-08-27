@@ -21,7 +21,7 @@
       "name": "server-login-permission-application",
       "source": "./plugins/server-login-permission-application",
       "description": "Interactive natural-language workflow for validated Zeus server-login permission applications.",
-      "version": "1.0.1"
+      "version": "1.2.0"
     }
   ]
 }

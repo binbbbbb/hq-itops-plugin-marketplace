@@ -18,3 +18,5 @@
 **/.workbuddy/
 #codebuddy记忆文件
 .codebuddy/memory/
+# 临时文件
+outputs/

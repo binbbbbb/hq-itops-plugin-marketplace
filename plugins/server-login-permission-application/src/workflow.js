@@ -57,12 +57,27 @@ export function resolveUser(users, input, { current = false } = {}) {
 }
 
 export function resolveAsset(assets, input, systemId) {
-  const scoped = assets.filter((asset) => asset.system_id == null || Number(asset.system_id) === Number(systemId));
+  const scoped = systemId == null
+    ? assets
+    : assets.filter((asset) => asset.system_id == null || Number(asset.system_id) === Number(systemId));
   return pick(scoped, input, {
     idKeys: ["id"], nameKeys: ["host_name", "ops_resource_name"],
     notFound: "ASSET_NOT_FOUND", ambiguous: "AMBIGUOUS_ASSET",
-    present: (asset) => ({ id: asset.id, host_name: asset.host_name, ops_resource_name: asset.ops_resource_name })
+    present: (asset) => ({
+      id: asset.id,
+      host_name: asset.host_name,
+      ops_resource_name: asset.ops_resource_name,
+      field_id: asset.field_id,
+      field_name: asset.field_name,
+      system_id: asset.system_id,
+      system_name: asset.system_name
+    })
   });
+}
+
+function systemForAsset(fields, asset) {
+  if (asset.system_id == null && asset.field_id == null) throw new WorkflowError("SYSTEM_NOT_FOUND");
+  return resolveSystem(fields, { system_id: asset.system_id, field_id: asset.field_id });
 }
 
 function normalizeOption(item) {
@@ -103,28 +118,47 @@ export class PermissionWorkflow {
   }
 
   async prepare(draft) {
-    if (!draft?.field_system) throw new WorkflowError("MISSING_FIELD_SYSTEM");
-    const description = text(draft.description);
+    const description = text(draft?.description);
     if (!description) throw new WorkflowError("MISSING_DESCRIPTION");
     if ([...description].length > 255) throw new WorkflowError("DESCRIPTION_TOO_LONG");
-    if (!Array.isArray(draft.permissions) || !draft.permissions.length) throw new WorkflowError("MISSING_PERMISSIONS");
+    if (!Array.isArray(draft?.permissions) || !draft.permissions.length) throw new WorkflowError("MISSING_PERMISSIONS");
 
-    const system = resolveSystem(await this.client.listFieldSystems(), draft.field_system);
+    const fields = await this.client.listFieldSystems();
+    const explicitSystem = draft.field_system ? resolveSystem(fields, draft.field_system) : undefined;
+    let system = explicitSystem;
     const currentUser = await findCurrentUser(this.client, this.currentBadge);
     const payloadPermissions = [];
     const summaryPermissions = [];
+    const groupedPermissions = new Map();
 
     for (const permission of draft.permissions) {
       if (!Array.isArray(permission.accounts) || !permission.accounts.length) throw new WorkflowError("MISSING_ACCOUNTS");
       const assetQuery = typeof permission.asset === "object" ? permission.asset.name ?? permission.asset.host_name ?? permission.asset.id : permission.asset;
-      const assetResult = await this.client.listAssets({ systemId: system.system_id, keyword: text(assetQuery) });
-      const asset = resolveAsset(assetResult.items, permission.asset, system.system_id);
+      const assetResult = await this.client.listAssets({ systemId: explicitSystem?.system_id, keyword: text(assetQuery) });
+      const asset = resolveAsset(assetResult.items, permission.asset, explicitSystem?.system_id);
+      const selectedSystem = asset.system_id == null && explicitSystem
+        ? explicitSystem
+        : systemForAsset(fields, asset);
+      if (system && (system.field_id !== selectedSystem.field_id || system.system_id !== selectedSystem.system_id)) {
+        throw new WorkflowError("ASSET_SYSTEM_MISMATCH");
+      }
+      system ??= selectedSystem;
+      const grouped = groupedPermissions.get(asset.id);
+      if (grouped) {
+        grouped.accounts.push(...permission.accounts);
+        grouped.candidatesTruncated ||= assetResult.truncated;
+      } else {
+        groupedPermissions.set(asset.id, { asset, accounts: [...permission.accounts], candidatesTruncated: assetResult.truncated });
+      }
+    }
+
+    for (const { asset, accounts, candidatesTruncated } of groupedPermissions.values()) {
       const payloadAccounts = [];
       const summaryAccounts = [];
       const seen = new Set();
       const typesByUser = new Map();
 
-      for (const account of permission.accounts) {
+      for (const account of accounts) {
         const { user, defaulted } = await findApplicant(this.client, account.applicant, currentUser);
         const options = await this.client.permissionOptions({ systemId: system.system_id, assetId: asset.id, userIds: [user.id] });
         const permissionType = resolveOption(options?.able_permission_type ?? [], account.permission_type, "PERMISSION_TYPE_NOT_ALLOWED", "AMBIGUOUS_PERMISSION_TYPE");
@@ -140,7 +174,18 @@ export class PermissionWorkflow {
         summaryAccounts.push({ applicant: publicUser(user), defaulted_to_self: defaulted, permission_type: permissionType, duration });
       }
       payloadPermissions.push({ asset_id: asset.id, accounts: payloadAccounts });
-      summaryPermissions.push({ asset: { id: asset.id, host_name: asset.host_name }, candidates_truncated: assetResult.truncated, accounts: summaryAccounts });
+      summaryPermissions.push({
+        asset: {
+          id: asset.id,
+          host_name: asset.host_name,
+          field_id: system.field_id,
+          field_name: system.field_name,
+          system_id: system.system_id,
+          system_name: system.system_name
+        },
+        candidates_truncated: candidatesTruncated,
+        accounts: summaryAccounts
+      });
     }
 
     const payload = { field_id: system.field_id, system_id: system.system_id, description, submit_type: 2, permissions: payloadPermissions };
@@ -153,6 +198,7 @@ export class PermissionWorkflow {
       permissions: summaryPermissions
     };
     const record = this.store.create({ payload, summary });
+    if (draft.previous_confirmation_id) this.store.supersede(draft.previous_confirmation_id);
     return { confirmation_id: record.confirmation_id, expires_at: new Date(record.expires_at).toISOString(), summary };
   }
 

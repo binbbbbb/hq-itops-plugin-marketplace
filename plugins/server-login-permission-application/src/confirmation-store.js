@@ -22,15 +22,24 @@ export class ConfirmationStore {
     this.ttlMs = ttlMs;
   }
 
-  clearPending() {
+  pruneExpired() {
     fs.mkdirSync(this.root, { recursive: true });
     for (const entry of fs.readdirSync(this.root, { withFileTypes: true })) {
-      if (entry.isFile() && entry.name.endsWith(".json")) fs.rmSync(path.join(this.root, entry.name));
+      if (!entry.isFile() || !entry.name.endsWith(".json")) continue;
+      const file = path.join(this.root, entry.name);
+      try {
+        const record = JSON.parse(fs.readFileSync(file, "utf8"));
+        if (this.now() <= Number(record.expires_at)) continue;
+        fs.rmSync(file, { force: true });
+        fs.rmSync(file.replace(/\.json$/, ".lock"), { force: true });
+      } catch {
+        // Leave malformed records untouched so they cannot be mistaken for valid confirmations.
+      }
     }
   }
 
   create({ payload, summary }) {
-    this.clearPending();
+    this.pruneExpired();
     const confirmationId = this.id();
     const createdAt = this.now();
     const record = {
@@ -46,6 +55,40 @@ export class ConfirmationStore {
     return record;
   }
 
+  claim(confirmationId) {
+    const safeId = String(confirmationId ?? "");
+    if (!/^[0-9A-Za-z-]+$/.test(safeId)) throw new WorkflowError("CONFIRMATION_NOT_FOUND");
+    fs.mkdirSync(this.root, { recursive: true });
+    const lock = path.join(this.root, `${safeId}.lock`);
+    try {
+      fs.writeFileSync(lock, String(this.now()), { encoding: "utf8", flag: "wx", mode: 0o600 });
+    } catch (error) {
+      if (error?.code === "EEXIST") throw new WorkflowError("CONFIRMATION_USED");
+      throw new WorkflowError("CONFIRMATION_NOT_FOUND", undefined, error);
+    }
+    try {
+      return { ...this.load(safeId), lock };
+    } catch (error) {
+      if (error?.code === "CONFIRMATION_NOT_FOUND") fs.rmSync(lock, { force: true });
+      throw error;
+    }
+  }
+
+  supersede(confirmationId) {
+    let claimed;
+    try {
+      claimed = this.claim(confirmationId);
+    } catch (error) {
+      if (["CONFIRMATION_NOT_FOUND", "CONFIRMATION_EXPIRED", "CONFIRMATION_USED"].includes(error?.code)) return false;
+      throw error;
+    }
+    const { record, file } = claimed;
+    record.status = "superseded";
+    record.superseded_at = this.now();
+    fs.writeFileSync(file, JSON.stringify(record), { encoding: "utf8", mode: 0o600 });
+    return true;
+  }
+
   load(confirmationId) {
     const safeId = String(confirmationId ?? "");
     if (!/^[0-9A-Za-z-]+$/.test(safeId)) throw new WorkflowError("CONFIRMATION_NOT_FOUND");
@@ -57,6 +100,7 @@ export class ConfirmationStore {
     } catch (error) {
       throw new WorkflowError("CONFIRMATION_NOT_FOUND", undefined, error);
     }
+    if (record.status === "superseded") throw new WorkflowError("CONFIRMATION_NOT_FOUND");
     if (record.status !== "pending") throw new WorkflowError("CONFIRMATION_USED");
     if (this.now() > record.expires_at) throw new WorkflowError("CONFIRMATION_EXPIRED");
     if (payloadHash(record.payload) !== record.hash) throw new WorkflowError("CONFIRMATION_CHANGED");
@@ -64,7 +108,7 @@ export class ConfirmationStore {
   }
 
   consume(confirmationId) {
-    const { record, file } = this.load(confirmationId);
+    const { record, file } = this.claim(confirmationId);
     record.status = "used";
     record.used_at = this.now();
     fs.writeFileSync(file, JSON.stringify(record), { encoding: "utf8", mode: 0o600 });

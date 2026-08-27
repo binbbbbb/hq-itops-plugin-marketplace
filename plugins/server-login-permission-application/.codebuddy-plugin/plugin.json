@@ -1,6 +1,6 @@
 {
   "name": "server-login-permission-application",
-  "version": "1.0.1",
+  "version": "1.2.0",
   "description": "Interactive natural-language workflow for validated Zeus server-login permission applications.",
   "author": {
     "name": "HQ ITOps"
@@ -15,5 +15,6 @@
   ],
   "skills": [
     "./skills/server-login-permission-application/"
-  ]
+  ],
+  "mcpServers": "./.mcp.json"
 }

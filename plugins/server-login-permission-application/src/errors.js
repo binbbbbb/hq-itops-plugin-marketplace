@@ -15,8 +15,9 @@ const SAFE_MESSAGES = {
   USER_NOT_FOUND: "申请人不在 Zeus 用户列表中。",
   AMBIGUOUS_USER: "申请人姓名存在多个候选，请按工号选择。",
   CURRENT_USER_NOT_FOUND: "无法确认当前用户工号，请显式提供工号。",
-  ASSET_NOT_FOUND: "资源不在所选系统的 Zeus 资源列表中。",
+  ASSET_NOT_FOUND: "资源不在 Zeus 资源列表中。",
   AMBIGUOUS_ASSET: "资源匹配到多个候选，请明确选择。",
+  ASSET_SYSTEM_MISMATCH: "所选资源不属于同一领域/系统，请拆分为不同申请。",
   PERMISSION_TYPE_NOT_ALLOWED: "权限类别不在该资源和申请人的可选范围内。",
   AMBIGUOUS_PERMISSION_TYPE: "权限类别匹配到多个候选，请明确选择。",
   DURATION_NOT_ALLOWED: "期限不在该申请人的可选范围内。",
@@ -55,4 +56,3 @@ export function safeErrorJson(error) {
     }
   };
 }
-

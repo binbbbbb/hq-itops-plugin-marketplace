@@ -9,8 +9,10 @@ import { PermissionWorkflow, resolveUser } from "../src/workflow.js";
 
 function fixtureClient() {
   const submissions = [];
+  const assetQueries = [];
   return {
     submissions,
+    assetQueries,
     async listFieldSystems() {
       return [{ id: 10, name: "基础架构", children: [{ id: 20, name: "Zeus" }] }];
     },
@@ -18,9 +20,17 @@ function fixtureClient() {
       if (keyword === "100001") return [{ id: 1, name: "当前用户", badge: "100001", department: "IT", group: "OPS" }];
       return [{ id: 2, name: "张三", badge: "100002", department: "IT", group: "A" }];
     },
-    async listAssets({ keyword }) {
+    async listAssets({ systemId, keyword }) {
+      assetQueries.push({ systemId, keyword });
       const second = keyword === "srv-02";
-      return { items: [{ id: second ? 31 : 30, host_name: second ? "srv-02" : "srv-01", system_id: 20 }], truncated: false };
+      return { items: [{
+        id: second ? 31 : 30,
+        host_name: second ? "srv-02" : "srv-01",
+        field_id: 10,
+        field_name: "基础架构",
+        system_id: 20,
+        system_name: "Zeus"
+      }], truncated: false };
     },
     async permissionOptions({ userIds }) {
       return {
@@ -61,6 +71,20 @@ test("prepare defaults applicant to current user and emits canonical summary", a
   assert.deepEqual(store.load("confirm-1").record.payload.permissions[0].accounts[0], { user_id: 1, permission_type: 1, duration: 7 });
 });
 
+test("prepare derives the field and system from the selected asset", async (t) => {
+  const client = fixtureClient();
+  const { root, store } = tempStore();
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const workflow = new PermissionWorkflow({ client, store, currentBadge: "100001" });
+  const { field_system, ...assetFirstDraft } = validDraft;
+  const result = await workflow.prepare(assetFirstDraft);
+  assert.deepEqual(result.summary.field, { id: 10, name: "基础架构" });
+  assert.deepEqual(result.summary.system, { id: 20, name: "Zeus" });
+  assert.equal(result.summary.permissions[0].asset.field_name, "基础架构");
+  assert.equal(result.summary.permissions[0].asset.system_name, "Zeus");
+  assert.equal(client.assetQueries[0].systemId, undefined);
+});
+
 test("multiple resources preserve explicit applicant mappings", async (t) => {
   const client = fixtureClient();
   const { root, store } = tempStore();
@@ -88,14 +112,37 @@ test("duplicate names require badge selection", () => {
   assert.equal(resolveUser(users, { badge: "100003" }).id, 3);
 });
 
-test("validation rejects missing fields and overlong descriptions without submission", async (t) => {
+test("validation rejects missing request data and overlong descriptions without submission", async (t) => {
   const client = fixtureClient();
   const { root, store } = tempStore();
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const workflow = new PermissionWorkflow({ client, store, currentBadge: "100001" });
-  await assert.rejects(() => workflow.prepare({}), (error) => error.code === "MISSING_FIELD_SYSTEM");
+  await assert.rejects(() => workflow.prepare({}), (error) => error.code === "MISSING_DESCRIPTION");
   await assert.rejects(() => workflow.prepare({ ...validDraft, description: "字".repeat(256) }), (error) => error.code === "DESCRIPTION_TOO_LONG");
   assert.equal(client.submissions.length, 0);
+});
+
+test("asset-derived applications reject resources from different systems", async (t) => {
+  const client = fixtureClient();
+  client.listFieldSystems = async () => [{
+    id: 10,
+    name: "基础架构",
+    children: [{ id: 20, name: "Zeus" }, { id: 21, name: "CMDB" }]
+  }];
+  client.listAssets = async ({ keyword }) => ({
+    items: [{ id: keyword === "srv-02" ? 31 : 30, host_name: keyword, field_id: 10, system_id: keyword === "srv-02" ? 21 : 20 }],
+    truncated: false
+  });
+  const { root, store } = tempStore();
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const workflow = new PermissionWorkflow({ client, store, currentBadge: "100001" });
+  await assert.rejects(() => workflow.prepare({
+    description: "跨系统资源",
+    permissions: [
+      { asset: "srv-01", accounts: [{ permission_type: "SSH", duration: "7天" }] },
+      { asset: "srv-02", accounts: [{ permission_type: "SSH", duration: "7天" }] }
+    ]
+  }), (error) => error.code === "ASSET_SYSTEM_MISMATCH");
 });
 
 test("submit requires exact phrase and consumes confirmation once", async (t) => {
@@ -112,18 +159,53 @@ test("submit requires exact phrase and consumes confirmation once", async (t) =>
   await assert.rejects(() => workflow.submit({ confirmation_id: "confirm-1", confirmation_phrase: "确认提交" }), (error) => error.code === "CONFIRMATION_USED");
 });
 
-test("new prepare invalidates old confirmation and expiry is enforced", async (t) => {
+test("new prepare invalidates only the explicitly replaced confirmation and expiry is enforced", async (t) => {
   let now = 1000;
   let counter = 0;
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "server-permission-test-"));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const store = new ConfirmationStore({ root, now: () => now, id: () => `confirm-${++counter}`, ttlMs: 100 });
   const workflow = new PermissionWorkflow({ client: fixtureClient(), store, currentBadge: "100001" });
-  await workflow.prepare(validDraft);
-  await workflow.prepare({ ...validDraft, description: "修改后的原因" });
+  const first = await workflow.prepare(validDraft);
+  await workflow.prepare({ ...validDraft, description: "修改后的原因", previous_confirmation_id: first.confirmation_id });
   assert.throws(() => store.load("confirm-1"), (error) => error.code === "CONFIRMATION_NOT_FOUND");
   now = 1200;
   assert.throws(() => store.load("confirm-2"), (error) => error.code === "CONFIRMATION_EXPIRED");
+});
+
+test("independent prepares keep each other's confirmations valid", async (t) => {
+  let counter = 0;
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "server-permission-test-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const store = new ConfirmationStore({ root, id: () => `confirm-${++counter}` });
+  const workflow = new PermissionWorkflow({ client: fixtureClient(), store, currentBadge: "100001" });
+  await workflow.prepare(validDraft);
+  await workflow.prepare({ ...validDraft, description: "另一个独立任务" });
+  assert.equal(store.load("confirm-1").record.status, "pending");
+  assert.equal(store.load("confirm-2").record.status, "pending");
+});
+
+test("replacing an expired confirmation still creates a usable new confirmation", async (t) => {
+  let now = 1000;
+  let counter = 0;
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "server-permission-test-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const store = new ConfirmationStore({ root, now: () => now, id: () => `confirm-${++counter}`, ttlMs: 100 });
+  const workflow = new PermissionWorkflow({ client: fixtureClient(), store, currentBadge: "100001" });
+  const first = await workflow.prepare(validDraft);
+  now = 1200;
+  const second = await workflow.prepare({ ...validDraft, description: "过期后修改", previous_confirmation_id: first.confirmation_id });
+  assert.equal(second.confirmation_id, "confirm-2");
+  assert.equal(store.load("confirm-2").record.status, "pending");
+});
+
+test("an atomic confirmation lock blocks a second process before status changes", async (t) => {
+  const { root, store } = tempStore();
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  store.create({ payload: { value: 1 }, summary: {} });
+  fs.writeFileSync(path.join(root, "confirm-1.lock"), "claimed", { flag: "wx" });
+  assert.throws(() => new ConfirmationStore({ root }).consume("confirm-1"), (error) => error.code === "CONFIRMATION_USED");
+  assert.equal(store.load("confirm-1").record.status, "pending");
 });
 
 test("duplicate and mutually exclusive permissions are rejected", async (t) => {
@@ -138,4 +220,15 @@ test("duplicate and mutually exclusive permissions are rejected", async (t) => {
     { permission_type: "SSH", duration: "7天" }, { permission_type: "SSH只读", duration: "7天" }
   ] }] };
   await assert.rejects(() => workflow.prepare(exclusive), (error) => error.code === "MUTUALLY_EXCLUSIVE_PERMISSION");
+});
+
+test("duplicate and mutually exclusive permissions cannot be split across repeated asset entries", async (t) => {
+  const { root, store } = tempStore();
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const workflow = new PermissionWorkflow({ client: fixtureClient(), store, currentBadge: "100001" });
+  const repeated = (permissionTypes) => ({ ...validDraft, permissions: permissionTypes.map((permission_type) => ({
+    asset: "srv-01", accounts: [{ permission_type, duration: "7天" }]
+  })) });
+  await assert.rejects(() => workflow.prepare(repeated(["SSH", "SSH"])), (error) => error.code === "DUPLICATE_PERMISSION");
+  await assert.rejects(() => workflow.prepare(repeated(["SSH", "SSH只读"])), (error) => error.code === "MUTUALLY_EXCLUSIVE_PERMISSION");
 });
