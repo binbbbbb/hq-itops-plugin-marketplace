@@ -109,7 +109,7 @@ export const MCP_TOOLS = [
 
 export function createMcpToolRuntime(dependencies = {}) {
   let runtime;
-
+  // 惰性初始化
   function getRuntime() {
     if (runtime) return runtime;
     const config = dependencies.config ?? loadConfig();

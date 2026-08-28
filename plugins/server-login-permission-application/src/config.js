@@ -46,7 +46,7 @@ function badgeFromInstallPath(candidate) {
   const index = parts.findIndex((part) => part.toLowerCase() === ".codebuddy" || part.toLowerCase() === ".codex");
   return index > 0 ? parts[index - 1] : "";
 }
-
+// 推导当前工号
 export function deriveCurrentBadge({ explicitBadge = "", installPath = fileURLToPath(import.meta.url), home = os.homedir(), env = process.env, exists = fs.existsSync } = {}) {
   if (String(explicitBadge).trim()) return String(explicitBadge).trim();
   const fromInstall = badgeFromInstallPath(installPath);
