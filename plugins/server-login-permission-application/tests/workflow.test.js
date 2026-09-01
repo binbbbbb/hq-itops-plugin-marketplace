@@ -71,6 +71,41 @@ test("prepare defaults applicant to current user and emits canonical summary", a
   assert.deepEqual(store.load("confirm-1").record.payload.permissions[0].accounts[0], { user_id: 1, permission_type: 1, duration: 7 });
 });
 
+test("prepare returns safe live candidates when a permission type is not allowed", async (t) => {
+  const client = fixtureClient();
+  const { root, store } = tempStore();
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const workflow = new PermissionWorkflow({ client, store, currentBadge: "100001" });
+  await assert.rejects(() => workflow.prepare({
+    ...validDraft,
+    permissions: [{ asset: "srv-01", accounts: [{ permission_type: "FTP", duration: "7天" }] }]
+  }), (error) => {
+    assert.equal(error.code, "PERMISSION_TYPE_NOT_ALLOWED");
+    assert.deepEqual(error.details.allowed_permission_types, [{ id: 1, name: "SSH" }, { id: 2, name: "SSH只读" }]);
+    return true;
+  });
+});
+
+test("prepare accepts permission types nested under the selected user", async (t) => {
+  const client = fixtureClient();
+  client.permissionOptions = async ({ userIds }) => ({
+    user_info: [{
+      user_id: userIds[0],
+      able_permission_type: [{ dict_id: 3, label: "FTP" }],
+      able_duration: [{ dict_id: 30, label: "1个月" }]
+    }]
+  });
+  const { root, store } = tempStore();
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const workflow = new PermissionWorkflow({ client, store, currentBadge: "100001" });
+  const result = await workflow.prepare({
+    ...validDraft,
+    permissions: [{ asset: "srv-01", accounts: [{ permission_type: "FTP", duration: "1个月" }] }]
+  });
+  assert.equal(result.summary.permissions[0].accounts[0].permission_type.id, 3);
+  assert.equal(result.summary.permissions[0].accounts[0].duration.id, 30);
+});
+
 test("prepare derives the field and system from the selected asset", async (t) => {
   const client = fixtureClient();
   const { root, store } = tempStore();
@@ -83,6 +118,21 @@ test("prepare derives the field and system from the selected asset", async (t) =
   assert.equal(result.summary.permissions[0].asset.field_name, "基础架构");
   assert.equal(result.summary.permissions[0].asset.system_name, "Zeus");
   assert.equal(client.assetQueries[0].systemId, undefined);
+});
+
+test("prepare revalidates a numeric asset selector with its cached canonical hostname", async (t) => {
+  const client = fixtureClient();
+  client.getCachedAssetById = (id) => Number(id) === 30
+    ? { id: 30, host_name: "srv-01", ops_resource_name: "" }
+    : undefined;
+  const { root, store } = tempStore();
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const workflow = new PermissionWorkflow({ client, store, currentBadge: "100001" });
+  await workflow.prepare({
+    description: "数字资产ID联调",
+    permissions: [{ asset: 30, accounts: [{ permission_type: "SSH", duration: "7天" }] }]
+  });
+  assert.equal(client.assetQueries[0].keyword, "srv-01");
 });
 
 test("multiple resources preserve explicit applicant mappings", async (t) => {
@@ -157,6 +207,76 @@ test("submit requires exact phrase and consumes confirmation once", async (t) =>
   assert.equal(result.order_id, 9001);
   assert.equal(client.submissions.length, 1);
   await assert.rejects(() => workflow.submit({ confirmation_id: "confirm-1", confirmation_phrase: "确认提交" }), (error) => error.code === "CONFIRMATION_USED");
+});
+
+test("conversation-bound confirmation submits without exposing its confirmation ID", async (t) => {
+  const client = fixtureClient();
+  const { root, store } = tempStore();
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const workflow = new PermissionWorkflow({ client, store, currentBadge: "100001" });
+  await workflow.prepare({ ...validDraft, conversation_key: "dify-conversation-1" });
+  const result = await workflow.submit({
+    conversation_key: "dify-conversation-1",
+    confirmation_phrase: "确认提交"
+  });
+  assert.equal(result.order_id, 9001);
+  assert.equal(client.submissions.length, 1);
+  await assert.rejects(() => workflow.submit({
+    conversation_key: "dify-conversation-1",
+    confirmation_phrase: "确认提交"
+  }), (error) => error.code === "CONFIRMATION_NOT_FOUND");
+});
+
+test("conversation binding rejects malformed keys and mixed identifiers", async (t) => {
+  const client = fixtureClient();
+  const { root, store } = tempStore();
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const workflow = new PermissionWorkflow({ client, store, currentBadge: "100001" });
+  await assert.rejects(
+    () => workflow.prepare({ ...validDraft, conversation_key: { unsafe: true } }),
+    (error) => error.code === "CONFIG_INVALID"
+  );
+  await workflow.prepare({ ...validDraft, conversation_key: "dify-conversation-1" });
+  await assert.rejects(
+    () => workflow.submit({ confirmation_id: "confirm-1", conversation_key: "dify-conversation-1", confirmation_phrase: "确认提交" }),
+    (error) => error.code === "CONFIG_INVALID"
+  );
+  assert.equal(client.submissions.length, 0);
+});
+
+test("conversation-bound confirmations are isolated by current user and conversation", async (t) => {
+  let counter = 0;
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "server-permission-test-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const store = new ConfirmationStore({ root, id: () => `confirm-${++counter}` });
+  const firstClient = fixtureClient();
+  const first = new PermissionWorkflow({ client: firstClient, store, currentBadge: "100001" });
+  const second = new PermissionWorkflow({ client: fixtureClient(), store, currentBadge: "100002" });
+  await first.prepare({ ...validDraft, conversation_key: "shared-key" });
+  await assert.rejects(() => second.submit({
+    conversation_key: "shared-key",
+    confirmation_phrase: "确认提交"
+  }), (error) => error.code === "CONFIRMATION_NOT_FOUND");
+  await assert.rejects(() => first.submit({
+    conversation_key: "other-key",
+    confirmation_phrase: "确认提交"
+  }), (error) => error.code === "CONFIRMATION_NOT_FOUND");
+  await first.submit({ conversation_key: "shared-key", confirmation_phrase: "确认提交" });
+  assert.equal(firstClient.submissions.length, 1);
+});
+
+test("a new prepare replaces only the prior confirmation in the same conversation", async (t) => {
+  let counter = 0;
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "server-permission-test-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const store = new ConfirmationStore({ root, id: () => `confirm-${++counter}` });
+  const workflow = new PermissionWorkflow({ client: fixtureClient(), store, currentBadge: "100001" });
+  await workflow.prepare({ ...validDraft, conversation_key: "conversation-a" });
+  await workflow.prepare({ ...validDraft, description: "修改后的申请", conversation_key: "conversation-a" });
+  await workflow.prepare({ ...validDraft, description: "另一个会话", conversation_key: "conversation-b" });
+  assert.throws(() => store.load("confirm-1"), (error) => error.code === "CONFIRMATION_NOT_FOUND");
+  assert.equal(store.load("confirm-2").record.status, "pending");
+  assert.equal(store.load("confirm-3").record.status, "pending");
 });
 
 test("new prepare invalidates only the explicitly replaced confirmation and expiry is enforced", async (t) => {

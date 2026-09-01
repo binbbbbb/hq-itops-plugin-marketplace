@@ -10,7 +10,7 @@ const pluginRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".
 
 test("plugin MCP config starts the server from the installed plugin root", () => {
   const config = JSON.parse(fs.readFileSync(path.join(pluginRoot, ".mcp.json"), "utf8"));
-  assert.deepEqual(config["server-login-permission"], {
+  assert.deepEqual(config.mcpServers["server-login-permission"], {
     command: "node",
     args: ["scripts/runtime-mcp.js"],
     cwd: ".",
@@ -31,7 +31,13 @@ test("MCP exposes the five scoped permission tools with write annotations", asyn
   assert.equal(MCP_TOOLS.find((tool) => tool.name === "submit_application").annotations.destructiveHint, true);
   assert.equal(MCP_TOOLS.find((tool) => tool.name === "prepare_application").annotations.destructiveHint, false);
   assert.equal(MCP_TOOLS.find((tool) => tool.name === "search_servers").inputSchema.required, undefined);
+  assert.deepEqual(MCP_TOOLS.find((tool) => tool.name === "get_permission_options").inputSchema.required, ["system_id", "server_id"]);
   assert.deepEqual(MCP_TOOLS.find((tool) => tool.name === "prepare_application").inputSchema.required, ["description", "permissions"]);
+  assert.deepEqual(MCP_TOOLS.find((tool) => tool.name === "submit_application").inputSchema.required, ["confirmation_phrase"]);
+  assert.deepEqual(MCP_TOOLS.find((tool) => tool.name === "submit_application").inputSchema.oneOf, [
+    { required: ["confirmation_id"] },
+    { required: ["conversation_key"] }
+  ]);
 });
 
 test("search_servers supports global asset lookup without resolving a field/system first", async () => {
@@ -53,12 +59,47 @@ test("search_servers supports global asset lookup without resolving a field/syst
   assert.equal("system" in result, false);
 });
 
+test("get_permission_options defaults an omitted user_ids field to the configured current user", async () => {
+  const calls = [];
+  const callTool = createMcpToolRuntime({
+    config: { currentBadge: "100001", environment: "生产环境" },
+    client: {
+      async listUsers(keyword) {
+        assert.equal(keyword, "100001");
+        return { items: [{ id: 7, name: "当前用户", badge: "100001" }], truncated: false };
+      },
+      async permissionOptions(input) {
+        calls.push(input);
+        return { able_permission_type: [{ id: 1, name: "FTP" }], user_info: [{ id: 7, able_duration: [{ id: 30, name: "1个月" }] }] };
+      }
+    }
+  });
+  const result = await callTool("get_permission_options", { system_id: 196, server_id: 17205 });
+  assert.deepEqual(calls, [{ systemId: 196, assetId: 17205, userIds: [7] }]);
+  assert.deepEqual(result.resolved_user_ids, [7]);
+  assert.equal(result.defaulted_to_current_user, true);
+  assert.equal(result.able_permission_type[0].name, "FTP");
+});
+
+test("get_permission_options rejects an explicitly empty user_ids field", async () => {
+  const callTool = createMcpToolRuntime({
+    config: { currentBadge: "100001", environment: "生产环境" },
+    client: {}
+  });
+  await assert.rejects(
+    () => callTool("get_permission_options", { system_id: 196, server_id: 17205, user_ids: [] }),
+    (error) => error.code === "CONFIG_INVALID"
+  );
+});
+
 test("MCP initialization advertises the confirmation and no-retry policy", async () => {
   const handle = createMessageHandler({ callTool: async () => ({}) });
   const response = await handle({ jsonrpc: "2.0", id: 2, method: "initialize", params: { protocolVersion: "2025-06-18" } });
   assert.equal(response.result.protocolVersion, "2025-06-18");
+  assert.equal(response.result.serverInfo.version, "1.4.1");
   assert.equal(response.result.instructions, SERVER_INSTRUCTIONS);
   assert.match(response.result.instructions, /确认提交/);
+  assert.match(response.result.instructions, /conversation_key/);
   assert.match(response.result.instructions, /Never retry/);
 });
 

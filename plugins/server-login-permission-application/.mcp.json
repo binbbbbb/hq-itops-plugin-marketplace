@@ -1,13 +1,16 @@
 {
-  "server-login-permission": {
-    "command": "node",
-    "args": [
-      "scripts/runtime-mcp.js"
-    ],
-    "env_vars": [
-      "ZEUS_TOKEN_SIGN",
-      "ZEUS_API_BASE",
-      "ZEUS_CURRENT_BADGE"
-    ]
+  "mcpServers": {
+    "server-login-permission": {
+      "command": "node",
+      "args": [
+        "scripts/runtime-mcp.js"
+      ],
+      "env_vars": [
+        "ZEUS_TOKEN_SIGN",
+        "ZEUS_API_BASE",
+        "ZEUS_CURRENT_BADGE"
+      ],
+      "cwd": "."
+    }
   }
 }

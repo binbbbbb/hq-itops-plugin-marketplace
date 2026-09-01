@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { ZeusClient } from "../src/api-client.js";
+import { normalizePermissionOptions, ZeusClient } from "../src/api-client.js";
 
 function response(body, ok = true) {
   return { ok, async json() { return body; } };
@@ -20,6 +20,23 @@ test("client exchanges an in-memory token and sends canonical POST once", async 
   assert.equal(calls[1].options.method, "POST");
   assert.deepEqual(JSON.parse(calls[1].options.body), payload);
   assert.equal(calls[1].options.headers.Authorization, "Bearer test-token");
+});
+
+test("submission extracts the order id from object-shaped responses", async () => {
+  const shapes = [
+    { body: { code: 100000, data: { order_id: 8801 } }, expected: 8801 },
+    { body: { code: 100000, data: { id: "8802" } }, expected: 8802 },
+    { body: { code: 100000, data: { data: { orderId: 8803 } } }, expected: 8803 },
+    { body: { code: 100000, data: null }, expected: null },
+    { body: { code: 100000, data: { msg: "ok" } }, expected: null }
+  ];
+  for (const shape of shapes) {
+    const fetchImpl = async (url) => String(url).includes("/api/token")
+      ? response({ code: 100000, data: { access_token: "test-token" } })
+      : response(shape.body);
+    const client = new ZeusClient({ apiBase: "https://zeusapi.huaqin.com", tokenSign: "test-sign", badge: "100001", fetchImpl });
+    assert.equal(await client.submit({}), shape.expected);
+  }
 });
 
 test("submission network failures are uncertain and are never retried", async () => {
@@ -77,5 +94,39 @@ test("global asset search omits system_id and preserves asset field/system metad
     system_name: "物流管理系统",
     field_id: 57,
     field_name: "物流领域"
+  });
+  assert.equal(client.getCachedAssetById(913).host_name, "srv-01");
+});
+
+test("business rejections report only the safe failing stage", async () => {
+  const fetchImpl = async (url) => {
+    if (String(url).includes("/api/token")) return response({ code: 100000, data: { access_token: "test-token" } });
+    return response({ code: 400001, message: "backend-sensitive-detail" });
+  };
+  const client = new ZeusClient({ apiBase: "https://zeusapi.huaqin.com", tokenSign: "test-sign", badge: "100001", fetchImpl });
+  await assert.rejects(() => client.permissionOptions({ systemId: 196, assetId: 17205, userIds: [1] }), (error) => {
+    assert.equal(error.code, "API_REJECTED");
+    assert.deepEqual(error.details, { stage: "permission_options" });
+    assert.doesNotMatch(JSON.stringify(error), /backend-sensitive-detail|test-sign|test-token/);
+    return true;
+  });
+});
+
+test("permission options normalize alternate labels and per-user nested types", () => {
+  assert.deepEqual(normalizePermissionOptions({
+    able_permission_type: [],
+    userInfo: [{
+      user_id: 7,
+      able_duration: [],
+      permission_type_options: [{ dict_id: 3, label: "FTP" }, { value: 4, dict_name: "SSH" }],
+      duration_options: [{ dict_value: 30, title: "1个月" }]
+    }]
+  }), {
+    able_permission_type: [{ id: 3, name: "FTP" }, { id: 4, name: "SSH" }],
+    user_info: [{
+      id: 7,
+      able_duration: [{ id: 30, name: "1个月" }],
+      able_permission_type: [{ id: 3, name: "FTP" }, { id: 4, name: "SSH" }]
+    }]
   });
 });

@@ -2,7 +2,7 @@ import readline from "node:readline";
 import { safeErrorJson } from "./errors.js";
 import { createMcpToolRuntime, MCP_TOOLS } from "./mcp-tools.js";
 
-export const SERVER_INSTRUCTIONS = "Apply for Zeus server-login permission only. Resolve every user, server, permission type, and duration from live tools. prepare_application never submits. Display its full summary and keep confirmation_id private. Call submit_application only after the user's exact standalone phrase 确认提交. Never retry submit_application, including after timeout or an uncertain result.";
+export const SERVER_INSTRUCTIONS = "Apply for Zeus server-login permission only. Resolve every user, server, permission type, and duration from live tools. prepare_application never submits. Display its full summary and keep confirmation_id private. A host with a stable opaque conversation key may pass the same conversation_key to prepare_application and submit_application instead of carrying confirmation_id. Never send both identifiers. Call submit_application only after the user's exact standalone phrase 确认提交. Never retry submit_application, including after timeout or an uncertain result.";
 
 function rpcError(code, message, data) {
   return { code, message, ...(data === undefined ? {} : { data }) };
@@ -25,7 +25,7 @@ export function createMessageHandler({ callTool = createMcpToolRuntime() } = {})
           result: {
             protocolVersion: String(message.params?.protocolVersion ?? "2024-11-05"),
             capabilities: { tools: { listChanged: false } },
-            serverInfo: { name: "server-login-permission-application", version: "1.2.0" },
+            serverInfo: { name: "server-login-permission-application", version: "1.4.1" },
             instructions: SERVER_INSTRUCTIONS
           }
         };

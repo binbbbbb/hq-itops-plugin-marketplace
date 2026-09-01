@@ -19,16 +19,17 @@ Use the MCP tools as follows:
 
 - `search_users`: search by badge or name. For duplicate names, show the returned name, badge, department, and group and require a choice.
 - `search_servers`: search the full live asset list by resource name or ID when no field/system was supplied. Each candidate includes its canonical field and system; once the user selects a resource, use those values as the defaults. If the user explicitly supplied a field/system, pass it to scope the search.
-- `get_permission_options`: retrieve permission types and per-user durations for canonical system, resource, and user IDs.
+- `get_permission_options`: retrieve permission types and per-user durations for a canonical system and resource. For the default current applicant, omit `user_ids` so the MCP resolves the configured current user; never send an empty array. For explicitly selected applicants, pass their non-empty canonical user ID list.
 - `prepare_application`: resolve and revalidate the complete draft, store a short-lived pending confirmation, and return the normalized summary without submitting.
 - `submit_application`: perform the one allowed Zeus write after the exact second confirmation.
 
-Do not accept any value merely because it looks plausible. It must resolve uniquely from the corresponding live response. When a tool returns `AMBIGUOUS_*`, show only its safe candidate list and ask the user to choose. When it returns `MISSING_*`, ask only for the missing information.
+Do not accept any value merely because it looks plausible. It must resolve uniquely from the corresponding live response. When a tool returns `AMBIGUOUS_*`, show only its safe candidate list and ask the user to choose. When it returns `PERMISSION_TYPE_NOT_ALLOWED` or `DURATION_NOT_ALLOWED` with safe allowed candidates, show those candidates instead of asking the user to guess. When it returns `MISSING_*`, ask only for the missing information.
 
 The `prepare_application` input shape is:
 
 ```json
 {
+  "conversation_key": "optional stable opaque host-conversation key",
   "field_system": "optional field or system name/id; omit to derive it from the selected asset",
   "description": "reason",
   "previous_confirmation_id": "optional prior confirmation ID when revising this same request",
@@ -53,10 +54,12 @@ All resources in one application must resolve to the same field/system. If `ASSE
 
 After `prepare_application` succeeds, print the complete returned summary, including production environment, submitter, field/system, reason, every resource, every applicant name and badge, permission type, and duration. Preserve the confirmation ID privately for the next step and say: `请核对以上信息，仅回复“确认提交”才会正式提单；如需修改，请直接说明字段。`
 
+If the host runtime provides a stable opaque conversation key, pass it as `conversation_key` to every `prepare_application` call for that request and later pass the same key to `submit_application`. The MCP binds it to the configured current user and stores only a hash of the binding. In this mode, do not carry or send `confirmation_id`, do not pass `previous_confirmation_id` when revising, and never expose either identifier. If the host does not provide a stable conversation key, retain the private confirmation-ID flow below.
+
 - Do not submit for `好`, `可以`, `是`, `确认`, or any other phrase.
 - If the user changes any field, run `prepare_application` again; the previous confirmation becomes invalid.
-- When rerunning `prepare_application` after a user change, pass the prior private confirmation ID as `previous_confirmation_id`. Do not pass an ID from another request.
-- Only after the exact standalone phrase `确认提交`, call `submit_application` with `confirmation_id` and `confirmation_phrase`.
+- When rerunning `prepare_application` after a user change in confirmation-ID mode, pass the prior private confirmation ID as `previous_confirmation_id`. Do not pass an ID from another request. In conversation-key mode, reuse the same `conversation_key`; the MCP invalidates the prior pending confirmation automatically.
+- Only after the exact standalone phrase `确认提交`, call `submit_application` with either the private `confirmation_id` or the stable `conversation_key`, plus `confirmation_phrase`; never send both identifiers.
 - Never rerun `submit_application` automatically, including after timeout or an uncertain response.
 
 On success, report the order ID and returned detail link. On `SUBMISSION_UNCERTAIN`, state that the result is uncertain and direct the user to My Applications; do not retry. For other safe error codes, explain the corrective action without displaying raw response bodies, URLs containing query parameters, Tokens, or signing values.

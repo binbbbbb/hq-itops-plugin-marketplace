@@ -3,6 +3,14 @@ import { WorkflowError } from "./errors.js";
 const text = (value) => String(value ?? "").trim();
 const lower = (value) => text(value).toLocaleLowerCase();
 
+function optionalConversationKey(value) {
+  if (value === undefined || value === null || value === "") return undefined;
+  if (typeof value !== "string") throw new WorkflowError("CONFIG_INVALID");
+  const normalized = value.trim();
+  if (!normalized || normalized.length > 255) throw new WorkflowError("CONFIG_INVALID");
+  return normalized;
+}
+
 function publicUser(user) {
   return { id: user.id, name: user.name, badge: user.badge, department: user.department, group: user.group };
 }
@@ -81,19 +89,54 @@ function systemForAsset(fields, asset) {
 }
 
 function normalizeOption(item) {
-  return { id: Number(item.id ?? item.value), name: text(item.name ?? item.dict_name) };
+  return {
+    id: Number(item.id ?? item.value ?? item.dict_id ?? item.dictId ?? item.dict_value
+      ?? item.permission_type_id ?? item.duration_id ?? item.key),
+    name: text(item.name ?? item.dict_name ?? item.dictName ?? item.label ?? item.title
+      ?? item.value_name ?? item.value_label ?? item.permission_type_name ?? item.duration_name)
+  };
 }
 
-function resolveOption(items, input, notFound, ambiguous) {
-  return pick(items.map(normalizeOption), input, {
-    idKeys: ["id"], nameKeys: ["name"], notFound, ambiguous, present: (item) => item
-  });
+function resolveOption(items, input, notFound, ambiguous, detailsKey) {
+  const candidates = items.map(normalizeOption).filter((item) => Number.isInteger(item.id) && item.id > 0 && item.name);
+  try {
+    return pick(candidates, input, {
+      idKeys: ["id"], nameKeys: ["name"], notFound, ambiguous, present: (item) => item
+    });
+  } catch (error) {
+    if (error?.code === notFound) throw new WorkflowError(notFound, { [detailsKey]: candidates });
+    throw error;
+  }
+}
+
+function permissionTypesForUser(options, userId) {
+  const topLevel = options?.able_permission_type ?? [];
+  if (topLevel.length) return topLevel;
+  const users = options?.user_info ?? [];
+  const exact = users.find((item) => Number(item.id ?? item.user_id) === Number(userId));
+  return (exact ?? users.at(-1) ?? {}).able_permission_type ?? [];
 }
 
 function durationsForUser(options, userId) {
   const users = options?.user_info ?? [];
   const exact = users.find((item) => Number(item.id ?? item.user_id) === Number(userId));
   return (exact ?? users.at(-1) ?? {}).able_duration ?? [];
+}
+
+function assetIdFromSelector(input) {
+  const value = typeof input === "object" && input !== null ? input.id : input;
+  return /^\d+$/.test(text(value)) ? Number(value) : undefined;
+}
+
+function assetSearchKeyword(client, input) {
+  const assetId = assetIdFromSelector(input);
+  if (assetId !== undefined) {
+    const cached = client.getCachedAssetById?.(assetId);
+    return text(cached?.host_name || cached?.ops_resource_name);
+  }
+  return text(typeof input === "object" && input !== null
+    ? input.name ?? input.host_name ?? input.value
+    : input);
 }
 
 async function findCurrentUser(client, currentBadge) {
@@ -118,6 +161,7 @@ export class PermissionWorkflow {
   }
 
   async prepare(draft) {
+    const conversationKey = optionalConversationKey(draft?.conversation_key);
     const description = text(draft?.description);
     if (!description) throw new WorkflowError("MISSING_DESCRIPTION");
     if ([...description].length > 255) throw new WorkflowError("DESCRIPTION_TOO_LONG");
@@ -133,8 +177,10 @@ export class PermissionWorkflow {
 
     for (const permission of draft.permissions) {
       if (!Array.isArray(permission.accounts) || !permission.accounts.length) throw new WorkflowError("MISSING_ACCOUNTS");
-      const assetQuery = typeof permission.asset === "object" ? permission.asset.name ?? permission.asset.host_name ?? permission.asset.id : permission.asset;
-      const assetResult = await this.client.listAssets({ systemId: explicitSystem?.system_id, keyword: text(assetQuery) });
+      const assetResult = await this.client.listAssets({
+        systemId: explicitSystem?.system_id,
+        keyword: assetSearchKeyword(this.client, permission.asset)
+      });
       const asset = resolveAsset(assetResult.items, permission.asset, explicitSystem?.system_id);
       const selectedSystem = asset.system_id == null && explicitSystem
         ? explicitSystem
@@ -161,8 +207,20 @@ export class PermissionWorkflow {
       for (const account of accounts) {
         const { user, defaulted } = await findApplicant(this.client, account.applicant, currentUser);
         const options = await this.client.permissionOptions({ systemId: system.system_id, assetId: asset.id, userIds: [user.id] });
-        const permissionType = resolveOption(options?.able_permission_type ?? [], account.permission_type, "PERMISSION_TYPE_NOT_ALLOWED", "AMBIGUOUS_PERMISSION_TYPE");
-        const duration = resolveOption(durationsForUser(options, user.id), account.duration, "DURATION_NOT_ALLOWED", "AMBIGUOUS_DURATION");
+        const permissionType = resolveOption(
+          permissionTypesForUser(options, user.id),
+          account.permission_type,
+          "PERMISSION_TYPE_NOT_ALLOWED",
+          "AMBIGUOUS_PERMISSION_TYPE",
+          "allowed_permission_types"
+        );
+        const duration = resolveOption(
+          durationsForUser(options, user.id),
+          account.duration,
+          "DURATION_NOT_ALLOWED",
+          "AMBIGUOUS_DURATION",
+          "allowed_durations"
+        );
         const duplicateKey = `${user.id}:${permissionType.id}`;
         if (seen.has(duplicateKey)) throw new WorkflowError("DUPLICATE_PERMISSION");
         seen.add(duplicateKey);
@@ -197,15 +255,30 @@ export class PermissionWorkflow {
       description,
       permissions: summaryPermissions
     };
-    const record = this.store.create({ payload, summary });
+    const record = this.store.create({
+      payload,
+      summary,
+      ...(conversationKey ? { context: { principal: this.currentBadge, conversationKey } } : {})
+    });
     if (draft.previous_confirmation_id) this.store.supersede(draft.previous_confirmation_id);
     return { confirmation_id: record.confirmation_id, expires_at: new Date(record.expires_at).toISOString(), summary };
   }
 
-  async submit({ confirmation_id: confirmationId, confirmation_phrase: confirmationPhrase }) {
+  async submit({ confirmation_id: confirmationId, conversation_key: rawConversationKey, confirmation_phrase: confirmationPhrase }) {
     if (confirmationPhrase !== "确认提交") throw new WorkflowError("CONFIRMATION_REQUIRED");
-    const record = this.store.consume(confirmationId);
+    const conversationKey = optionalConversationKey(rawConversationKey);
+    if (confirmationId && conversationKey) throw new WorkflowError("CONFIG_INVALID");
+    const record = conversationKey
+      ? this.store.consumeByContext({ principal: this.currentBadge, conversationKey })
+      : this.store.consume(confirmationId);
     const orderId = await this.client.submit(record.payload);
+    if (!orderId) {
+      return {
+        order_id: null,
+        detail_url: null,
+        note: "提交成功，但 Zeus 响应中未包含工单号，请前往 Zeus“我的申请”页面核对。"
+      };
+    }
     return {
       order_id: orderId,
       detail_url: `https://zeus.huaqin.com/order/ops_permission_apply/profile/${encodeURIComponent(String(orderId))}`

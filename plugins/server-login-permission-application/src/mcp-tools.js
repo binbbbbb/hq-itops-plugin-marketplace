@@ -2,7 +2,7 @@ import { ZeusClient } from "./api-client.js";
 import { ConfirmationStore } from "./confirmation-store.js";
 import { deriveCurrentBadge, loadConfig } from "./config.js";
 import { WorkflowError } from "./errors.js";
-import { PermissionWorkflow, publicUser, resolveSystem } from "./workflow.js";
+import { PermissionWorkflow, publicUser, resolveSystem, resolveUser } from "./workflow.js";
 
 const selectorSchema = {
   anyOf: [
@@ -50,27 +50,39 @@ export const MCP_TOOLS = [
   },
   {
     name: "get_permission_options",
-    description: "Get live permission types and allowed durations for one Zeus system/server and one or more canonical user IDs.",
+    description: "Get live permission types and allowed durations for one Zeus system/server. Omit user_ids to use the MCP-configured current user; otherwise pass one or more canonical user IDs.",
     inputSchema: {
       type: "object",
       additionalProperties: false,
-      required: ["system_id", "server_id", "user_ids"],
+      required: ["system_id", "server_id"],
       properties: {
         system_id: { type: "integer" },
         server_id: { type: "integer" },
-        user_ids: { type: "array", minItems: 1, uniqueItems: true, items: { type: "integer" } }
+        user_ids: {
+          type: "array",
+          minItems: 1,
+          uniqueItems: true,
+          items: { type: "integer" },
+          description: "Optional canonical user IDs. Omit this field to resolve the configured current user; never pass an empty array."
+        }
       }
     },
     annotations: { title: "Get permission options", readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true }
   },
   {
     name: "prepare_application",
-    description: "Live-validate and normalize a complete server-login permission draft. Creates only a short-lived local confirmation; it does not submit to Zeus.",
+    description: "Live-validate and normalize a complete server-login permission draft. Creates only a short-lived local confirmation; it does not submit to Zeus. A host may bind it to a stable conversation_key.",
     inputSchema: {
       type: "object",
       additionalProperties: false,
       required: ["description", "permissions"],
       properties: {
+        conversation_key: {
+          type: "string",
+          minLength: 1,
+          maxLength: 255,
+          description: "Optional stable opaque host-conversation key. When supplied, the pending confirmation is bound to this key and the configured current user."
+        },
         field_system: { ...selectorSchema, description: "Optional field/system name or canonical ID. When omitted, it is derived from the selected asset." },
         description: { type: "string", minLength: 1, maxLength: 255 },
         previous_confirmation_id: { type: "string", pattern: "^[0-9A-Za-z-]+$" },
@@ -93,13 +105,23 @@ export const MCP_TOOLS = [
   },
   {
     name: "submit_application",
-    description: "Submit exactly one previously prepared application to production Zeus. Call only after the user replies with the exact standalone phrase 确认提交. Never retry automatically.",
+    description: "Submit exactly one previously prepared application to production Zeus using either its private confirmation_id or the stable conversation_key used to prepare it. Call only after the user replies with the exact standalone phrase 确认提交. Never retry automatically.",
     inputSchema: {
       type: "object",
       additionalProperties: false,
-      required: ["confirmation_id", "confirmation_phrase"],
+      required: ["confirmation_phrase"],
+      oneOf: [
+        { required: ["confirmation_id"] },
+        { required: ["conversation_key"] }
+      ],
       properties: {
         confirmation_id: { type: "string", pattern: "^[0-9A-Za-z-]+$" },
+        conversation_key: {
+          type: "string",
+          minLength: 1,
+          maxLength: 255,
+          description: "Stable opaque host-conversation key previously supplied to prepare_application."
+        },
         confirmation_phrase: { type: "string", enum: ["确认提交"] }
       }
     },
@@ -119,13 +141,14 @@ export function createMcpToolRuntime(dependencies = {}) {
     const store = dependencies.store ?? new ConfirmationStore();
     runtime = {
       client,
+      currentBadge: badge,
       workflow: new PermissionWorkflow({ client, store, currentBadge: badge, environment: config.environment })
     };
     return runtime;
   }
 
   return async function callTool(name, input = {}) {
-    const { client, workflow } = getRuntime();
+    const { client, currentBadge, workflow } = getRuntime();
     switch (name) {
       case "search_users": {
         const keyword = String(input.keyword ?? "").trim();
@@ -147,18 +170,35 @@ export function createMcpToolRuntime(dependencies = {}) {
           truncated: result.truncated
         };
       }
-      case "get_permission_options":
+      case "get_permission_options": {
         if (!Number.isInteger(Number(input.system_id)) || Number(input.system_id) <= 0
-          || !Number.isInteger(Number(input.server_id)) || Number(input.server_id) <= 0
-          || !Array.isArray(input.user_ids) || !input.user_ids.length
-          || input.user_ids.some((id) => !Number.isInteger(Number(id)) || Number(id) <= 0)) {
+          || !Number.isInteger(Number(input.server_id)) || Number(input.server_id) <= 0) {
           throw new WorkflowError("CONFIG_INVALID");
         }
-        return await client.permissionOptions({
+        const defaultedToCurrentUser = input.user_ids === undefined || input.user_ids === null;
+        let userIds;
+        if (defaultedToCurrentUser) {
+          const result = await client.listUsers(currentBadge);
+          const users = Array.isArray(result) ? result : result.items;
+          userIds = [resolveUser(users, { badge: currentBadge }, { current: true }).id];
+        } else {
+          if (!Array.isArray(input.user_ids) || !input.user_ids.length
+            || input.user_ids.some((id) => !Number.isInteger(Number(id)) || Number(id) <= 0)) {
+            throw new WorkflowError("CONFIG_INVALID");
+          }
+          userIds = input.user_ids.map(Number);
+        }
+        const options = await client.permissionOptions({
           systemId: Number(input.system_id),
           assetId: Number(input.server_id),
-          userIds: (input.user_ids ?? []).map(Number)
+          userIds
         });
+        return {
+          ...options,
+          resolved_user_ids: userIds,
+          defaulted_to_current_user: defaultedToCurrentUser
+        };
+      }
       case "prepare_application":
         return await workflow.prepare(input);
       case "submit_application":

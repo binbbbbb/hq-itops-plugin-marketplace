@@ -21,8 +21,8 @@ function safeBackendCode(response) {
   return "API_REJECTED";
 }
 
-function expectSuccess(body) {
-  if (!body || body.code !== 100000) throw new WorkflowError(safeBackendCode(body));
+function expectSuccess(body, stage) {
+  if (!body || body.code !== 100000) throw new WorkflowError(safeBackendCode(body), { stage });
   return body.data;
 }
 
@@ -50,6 +50,84 @@ function normalizeAssets(data) {
   }));
 }
 
+function firstArray(...values) {
+  let empty = [];
+  for (const value of values) {
+    const candidate = Array.isArray(value) ? value
+      : Array.isArray(value?.items) ? value.items
+        : Array.isArray(value?.list) ? value.list
+          : Array.isArray(value?.options) ? value.options
+            : undefined;
+    if (candidate?.length) return candidate;
+    if (candidate) empty = candidate;
+  }
+  return empty;
+}
+
+function normalizePermissionOption(option) {
+  if (!option || typeof option !== "object") return undefined;
+  const id = Number(option.id ?? option.value ?? option.dict_id ?? option.dictId ?? option.dict_value
+    ?? option.permission_type_id ?? option.duration_id ?? option.key);
+  const name = String(option.name ?? option.dict_name ?? option.dictName ?? option.label ?? option.title
+    ?? option.value_name ?? option.value_label ?? option.permission_type_name ?? option.duration_name ?? "").trim();
+  if (!Number.isInteger(id) || id <= 0 || !name) return undefined;
+  return { id, name };
+}
+
+function normalizePermissionOptionList(...values) {
+  const unique = new Map();
+  for (const option of firstArray(...values)) {
+    const normalized = normalizePermissionOption(option);
+    if (normalized) unique.set(`${normalized.id}:${normalized.name.toLocaleLowerCase()}`, normalized);
+  }
+  return [...unique.values()];
+}
+
+function intersectOptionLists(lists) {
+  if (!lists.length || lists.some((list) => !list.length)) return [];
+  const allowed = new Set(lists[0].map((item) => `${item.id}:${item.name.toLocaleLowerCase()}`));
+  for (const list of lists.slice(1)) {
+    const current = new Set(list.map((item) => `${item.id}:${item.name.toLocaleLowerCase()}`));
+    for (const key of allowed) if (!current.has(key)) allowed.delete(key);
+  }
+  return lists[0].filter((item) => allowed.has(`${item.id}:${item.name.toLocaleLowerCase()}`));
+}
+
+export function normalizePermissionOptions(data) {
+  const source = data?.data && typeof data.data === "object" ? data.data : data ?? {};
+  const rawUsers = firstArray(source.user_info, source.userInfo, source.users);
+  const userInfo = rawUsers.map((user) => ({
+    id: Number(user.id ?? user.user_id),
+    able_duration: normalizePermissionOptionList(
+      user.able_duration,
+      user.ableDuration,
+      user.durations,
+      user.duration_options,
+      user.duration
+    ),
+    able_permission_type: normalizePermissionOptionList(
+      user.able_permission_type,
+      user.ablePermissionType,
+      user.permission_types,
+      user.permission_type_options,
+      user.permission_type
+    )
+  })).filter((user) => Number.isInteger(user.id) && user.id > 0);
+
+  const topLevelTypes = normalizePermissionOptionList(
+    source.able_permission_type,
+    source.ablePermissionType,
+    source.permission_types,
+    source.permission_type_options,
+    source.permission_type
+  );
+  const nestedTypes = userInfo.map((user) => user.able_permission_type);
+  return {
+    able_permission_type: topLevelTypes.length ? topLevelTypes : intersectOptionLists(nestedTypes),
+    user_info: userInfo
+  };
+}
+
 export class ZeusClient {
   constructor({ apiBase, tokenSign, badge, fetchImpl = globalThis.fetch, timeoutMs = 15000 }) {
     this.apiBase = apiBase;
@@ -58,6 +136,7 @@ export class ZeusClient {
     this.fetchImpl = fetchImpl;
     this.timeoutMs = timeoutMs;
     this.accessToken = "";
+    this.assetsById = new Map();
   }
 
   async rawRequest(pathname, { method = "GET", params, body, authenticated = true, submission = false } = {}) {
@@ -99,7 +178,7 @@ export class ZeusClient {
   }
 
   async listFieldSystems() {
-    const data = expectSuccess(await this.rawRequest("/api/resource_center/field_systems"));
+    const data = expectSuccess(await this.rawRequest("/api/resource_center/field_systems"), "field_systems");
     return Array.isArray(data) ? data : data?.field_systems ?? [];
   }
 
@@ -107,7 +186,7 @@ export class ZeusClient {
     const collected = [];
     let truncated = false;
     for (let page = 1; page <= maxPages; page += 1) {
-      const data = expectSuccess(await this.rawRequest("/api/user", { params: { keyword, page, page_size: pageSize } }));
+      const data = expectSuccess(await this.rawRequest("/api/user", { params: { keyword, page, page_size: pageSize } }), "users");
       const pageItems = normalizeUsers(data);
       collected.push(...pageItems);
       if (Array.isArray(data)) {
@@ -126,8 +205,9 @@ export class ZeusClient {
     for (let page = 1; page <= maxPages; page += 1) {
       const data = expectSuccess(await this.rawRequest("/api/resource_center/asset_info_list", {
         params: { system_id: systemId, keyword, page, page_size: pageSize }
-      }));
+      }), "assets");
       const pageItems = normalizeAssets(data);
+      for (const asset of pageItems) if (Number.isInteger(asset.id) && asset.id > 0) this.assetsById.set(asset.id, asset);
       collected.push(...pageItems);
       if (Array.isArray(data)) {
         truncated = pageItems.length >= pageSize;
@@ -139,15 +219,30 @@ export class ZeusClient {
     return { items: collected, truncated };
   }
 
+  getCachedAssetById(assetId) {
+    return this.assetsById.get(Number(assetId));
+  }
+
   async permissionOptions({ systemId, assetId, userIds, lang = "zh" }) {
-    return expectSuccess(await this.rawRequest("/api/ops/permission_type_duration", {
+    const data = expectSuccess(await this.rawRequest("/api/ops/permission_type_duration", {
       params: { system_id: systemId, asset_id: assetId, user_ids: userIds.join(","), lang }
-    }));
+    }), "permission_options");
+    return normalizePermissionOptions(data);
   }
 
   async submit(payload) {
-    return expectSuccess(await this.rawRequest("/api/order/ops_permission_apply", { method: "POST", body: payload, submission: true }));
+    const data = expectSuccess(await this.rawRequest("/api/order/ops_permission_apply", { method: "POST", body: payload, submission: true }), "submission");
+    return normalizeOrderId(data);
   }
+}
+
+function normalizeOrderId(data) {
+  const candidates = [data, data?.order_id, data?.orderId, data?.id, data?.data?.order_id, data?.data?.orderId, data?.data?.id];
+  for (const candidate of candidates) {
+    const value = Number(candidate);
+    if (Number.isInteger(value) && value > 0) return value;
+  }
+  return null;
 }
 
 export { normalizeAssets, normalizeUsers };

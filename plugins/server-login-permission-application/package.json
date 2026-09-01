@@ -1,12 +1,13 @@
 {
   "name": "server-login-permission-application",
-  "version": "1.2.0",
+  "version": "1.4.1",
   "private": true,
   "type": "module",
   "description": "Validated Zeus server-login permission application workflow.",
   "scripts": {
     "test": "node tests/run-all.js",
-    "check": "node --check scripts/runtime-cli.js && node --check scripts/runtime-mcp.js"
+    "check": "node --check scripts/runtime-cli.js && node --check scripts/runtime-mcp.js && node --check scripts/runtime-http.js",
+    "remote": "node scripts/runtime-http.js"
   },
   "engines": {
     "node": ">=20"

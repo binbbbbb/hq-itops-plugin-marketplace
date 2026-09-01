@@ -14,6 +14,15 @@ export function payloadHash(payload) {
   return crypto.createHash("sha256").update(JSON.stringify(stable(payload))).digest("hex");
 }
 
+function contextHash({ principal, conversationKey } = {}) {
+  const normalizedPrincipal = String(principal ?? "").trim();
+  const normalizedConversationKey = String(conversationKey ?? "").trim();
+  if (!normalizedPrincipal || !normalizedConversationKey) return undefined;
+  return crypto.createHash("sha256")
+    .update(`${normalizedPrincipal}\u0000${normalizedConversationKey}`)
+    .digest("hex");
+}
+
 export class ConfirmationStore {
   constructor({ root = path.join(os.tmpdir(), "hq-itops-server-login-permission"), now = () => Date.now(), id = () => crypto.randomUUID(), ttlMs = 30 * 60 * 1000 } = {}) {
     this.root = root;
@@ -38,8 +47,35 @@ export class ConfirmationStore {
     }
   }
 
-  create({ payload, summary }) {
+  records() {
+    fs.mkdirSync(this.root, { recursive: true });
+    const records = [];
+    for (const entry of fs.readdirSync(this.root, { withFileTypes: true })) {
+      if (!entry.isFile() || !entry.name.endsWith(".json")) continue;
+      const file = path.join(this.root, entry.name);
+      try {
+        records.push({ record: JSON.parse(fs.readFileSync(file, "utf8")), file });
+      } catch {
+        // Malformed records are deliberately ignored and can never become valid confirmations.
+      }
+    }
+    return records;
+  }
+
+  supersedeContext(hash) {
+    if (!hash) return;
+    for (const { record, file } of this.records()) {
+      if (record.context_hash !== hash || record.status !== "pending") continue;
+      record.status = "superseded";
+      record.superseded_at = this.now();
+      fs.writeFileSync(file, JSON.stringify(record), { encoding: "utf8", mode: 0o600 });
+    }
+  }
+
+  create({ payload, summary, context }) {
     this.pruneExpired();
+    const bindingHash = contextHash(context);
+    this.supersedeContext(bindingHash);
     const confirmationId = this.id();
     const createdAt = this.now();
     const record = {
@@ -49,7 +85,8 @@ export class ConfirmationStore {
       status: "pending",
       hash: payloadHash(payload),
       payload,
-      summary
+      summary,
+      ...(bindingHash ? { context_hash: bindingHash } : {})
     };
     fs.writeFileSync(path.join(this.root, `${confirmationId}.json`), JSON.stringify(record), { encoding: "utf8", flag: "wx", mode: 0o600 });
     return record;
@@ -107,11 +144,35 @@ export class ConfirmationStore {
     return { record, file };
   }
 
+  loadByContext(context) {
+    this.pruneExpired();
+    const bindingHash = contextHash(context);
+    if (!bindingHash) throw new WorkflowError("CONFIRMATION_NOT_FOUND");
+    const candidates = this.records()
+      .map(({ record }) => record)
+      .filter((record) => record.context_hash === bindingHash && record.status === "pending")
+      .sort((left, right) => Number(right.created_at) - Number(left.created_at));
+    for (const record of candidates) {
+      try {
+        return this.load(record.confirmation_id);
+      } catch (error) {
+        if (["CONFIRMATION_NOT_FOUND", "CONFIRMATION_EXPIRED", "CONFIRMATION_USED"].includes(error?.code)) continue;
+        throw error;
+      }
+    }
+    throw new WorkflowError("CONFIRMATION_NOT_FOUND");
+  }
+
   consume(confirmationId) {
     const { record, file } = this.claim(confirmationId);
     record.status = "used";
     record.used_at = this.now();
     fs.writeFileSync(file, JSON.stringify(record), { encoding: "utf8", mode: 0o600 });
     return record;
+  }
+
+  consumeByContext(context) {
+    const { record } = this.loadByContext(context);
+    return this.consume(record.confirmation_id);
   }
 }
