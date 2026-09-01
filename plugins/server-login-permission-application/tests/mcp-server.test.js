@@ -13,9 +13,10 @@ test("plugin MCP config starts the server from the installed plugin root", () =>
   assert.deepEqual(config.mcpServers["server-login-permission"], {
     command: "node",
     args: ["scripts/runtime-mcp.js"],
+    cwd: ".",
     env_vars: ["ZEUS_TOKEN_SIGN", "ZEUS_API_BASE", "ZEUS_CURRENT_BADGE"]
   });
-  assert.equal("cwd" in config.mcpServers["server-login-permission"], false);
+  assert.equal(fs.existsSync(path.resolve(pluginRoot, config.mcpServers["server-login-permission"].cwd, config.mcpServers["server-login-permission"].args[0])), true);
 });
 
 test("MCP exposes the five scoped permission tools with write annotations", async () => {
@@ -96,7 +97,7 @@ test("MCP initialization advertises the confirmation and no-retry policy", async
   const handle = createMessageHandler({ callTool: async () => ({}) });
   const response = await handle({ jsonrpc: "2.0", id: 2, method: "initialize", params: { protocolVersion: "2025-06-18" } });
   assert.equal(response.result.protocolVersion, "2025-06-18");
-  assert.equal(response.result.serverInfo.version, "1.4.1");
+  assert.equal(response.result.serverInfo.version, "1.4.2");
   assert.equal(response.result.instructions, SERVER_INSTRUCTIONS);
   assert.match(response.result.instructions, /确认提交/);
   assert.match(response.result.instructions, /conversation_key/);

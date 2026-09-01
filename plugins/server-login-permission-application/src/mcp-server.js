@@ -25,7 +25,7 @@ export function createMessageHandler({ callTool = createMcpToolRuntime() } = {})
           result: {
             protocolVersion: String(message.params?.protocolVersion ?? "2024-11-05"),
             capabilities: { tools: { listChanged: false } },
-            serverInfo: { name: "server-login-permission-application", version: "1.4.1" },
+            serverInfo: { name: "server-login-permission-application", version: "1.4.2" },
             instructions: SERVER_INSTRUCTIONS
           }
         };

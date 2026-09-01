@@ -1,6 +1,6 @@
 {
   "name": "server-login-permission-application",
-  "version": "1.4.1",
+  "version": "1.4.2",
   "private": true,
   "type": "module",
   "description": "Validated Zeus server-login permission application workflow.",
