@@ -9,8 +9,7 @@
         "ZEUS_TOKEN_SIGN",
         "ZEUS_API_BASE",
         "ZEUS_CURRENT_BADGE"
-      ],
-      "cwd": "."
+      ]
     }
   }
 }
