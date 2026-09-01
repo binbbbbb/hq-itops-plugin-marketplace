@@ -13,9 +13,9 @@ test("plugin MCP config starts the server from the installed plugin root", () =>
   assert.deepEqual(config.mcpServers["server-login-permission"], {
     command: "node",
     args: ["scripts/runtime-mcp.js"],
-    cwd: ".",
     env_vars: ["ZEUS_TOKEN_SIGN", "ZEUS_API_BASE", "ZEUS_CURRENT_BADGE"]
   });
+  assert.equal("cwd" in config.mcpServers["server-login-permission"], false);
 });
 
 test("MCP exposes the five scoped permission tools with write annotations", async () => {
