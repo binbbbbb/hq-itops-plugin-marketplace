@@ -5,7 +5,6 @@
       "args": [
         "scripts/runtime-mcp.js"
       ],
-      "cwd": ".",
       "env_vars": [
         "ZEUS_TOKEN_SIGN",
         "ZEUS_API_BASE",
