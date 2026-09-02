@@ -3,8 +3,12 @@
     "phishing-email-screening": {
       "command": "node",
       "args": [
-        "scripts/runtime-mcp.js"
+        "scripts/runtime-mcp.js",
+        "phishing-email-screening"
       ],
+      "env": {
+        "HQ_ITOPS_MCP_PLUGIN": "phishing-email-screening"
+      },
       "env_vars": [
         "COREMAIL_USERNAME",
         "COREMAIL_PASSWORD",

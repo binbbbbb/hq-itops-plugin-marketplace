@@ -12,11 +12,11 @@ test("plugin MCP config starts the server from the installed plugin root", () =>
   const config = JSON.parse(fs.readFileSync(path.join(pluginRoot, ".mcp.json"), "utf8"));
   assert.deepEqual(config.mcpServers["server-login-permission"], {
     command: "node",
-    args: ["scripts/runtime-mcp.js"],
-    cwd: ".",
+    args: ["scripts/runtime-mcp.js", "server-login-permission-application"],
+    env: { HQ_ITOPS_MCP_PLUGIN: "server-login-permission-application" },
     env_vars: ["ZEUS_TOKEN_SIGN", "ZEUS_API_BASE", "ZEUS_CURRENT_BADGE"]
   });
-  assert.equal(fs.existsSync(path.resolve(pluginRoot, config.mcpServers["server-login-permission"].cwd, config.mcpServers["server-login-permission"].args[0])), true);
+  assert.equal(fs.existsSync(path.resolve(pluginRoot, config.mcpServers["server-login-permission"].args[0])), true);
 });
 
 test("MCP exposes the five scoped permission tools with write annotations", async () => {

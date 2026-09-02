@@ -42,7 +42,7 @@ function riskItem(index, classification) {
 test("双平台 MCP 配置启动唯一的钓鱼扫描服务", () => {
   const config = JSON.parse(fs.readFileSync(path.join(pluginRoot, ".mcp.json"), "utf8"));
   assert.equal(config.mcpServers["phishing-email-screening"].command, "node");
-  assert.deepEqual(config.mcpServers["phishing-email-screening"].args, ["scripts/runtime-mcp.js"]);
+  assert.deepEqual(config.mcpServers["phishing-email-screening"].args, ["scripts/runtime-mcp.js", "phishing-email-screening"]);
   assert.equal("cwd" in config.mcpServers["phishing-email-screening"], false);
 });
 

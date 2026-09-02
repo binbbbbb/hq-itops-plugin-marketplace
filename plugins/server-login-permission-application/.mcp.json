@@ -3,8 +3,12 @@
     "server-login-permission": {
       "command": "node",
       "args": [
-        "scripts/runtime-mcp.js"
+        "scripts/runtime-mcp.js",
+        "server-login-permission-application"
       ],
+      "env": {
+        "HQ_ITOPS_MCP_PLUGIN": "server-login-permission-application"
+      },
       "env_vars": [
         "ZEUS_TOKEN_SIGN",
         "ZEUS_API_BASE",
