@@ -5,3 +5,6 @@ import "./coremail.test.js";
 import "./coremail-auth.test.js";
 import "./python-runtime.test.js";
 import "./report.test.js";
+import "./scan-service.test.js";
+import "./mcp-server.test.js";
+import "./http-mcp-server.test.js";

@@ -8,8 +8,8 @@
     {
       "name": "phishing-email-screening",
       "source": "./plugins/phishing-email-screening",
-      "description": "Local Coremail metadata phishing-email pre-screening with email and domain allowlists.",
-      "version": "3.0.0"
+      "description": "Coremail metadata phishing-email pre-screening for Codex, CodeBuddy, and Dify MCP.",
+      "version": "3.1.0"
     },
     {
       "name": "api-token-automation",

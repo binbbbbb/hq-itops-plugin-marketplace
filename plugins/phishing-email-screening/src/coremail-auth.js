@@ -108,10 +108,15 @@ function runCookieHelper({ pythonExecutable, scriptPath, request, timeoutMs }) {
       clearTimeout(timer);
       callback();
     };
+    // The helper can spend up to timeoutMs on page load plus timeoutMs on the
+    // post-login redirect, with bounded form actions in between. Give the
+    // watchdog enough headroom so the helper can always exit on its own and
+    // return a structured diagnostic instead of being killed silently.
+    const watchdogMs = 2 * timeoutMs + 60_000;
     const timer = setTimeout(() => {
       child.kill();
       finish(() => reject(new AuthExpiredError("Coremail 自动登录超时，请检查本机网络、Chrome 和登录配置。")));
-    }, timeoutMs + 10_000);
+    }, watchdogMs);
 
     child.on("error", (error) => {
       finish(() => reject(new ConfigError(`无法启动 Coremail 自动登录程序：${error.message}`, { cause: error })));

@@ -1,0 +1,22 @@
+{
+  "mcpServers": {
+    "phishing-email-screening": {
+      "command": "node",
+      "args": [
+        "scripts/runtime-mcp.js"
+      ],
+      "env_vars": [
+        "COREMAIL_USERNAME",
+        "COREMAIL_PASSWORD",
+        "COREMAIL_COOKIE",
+        "PHISHING_EMAIL_SCREENING_PYTHON",
+        "PHISHING_EMAIL_SCREENING_RUNTIME_DIR",
+        "PIP_INDEX_URL",
+        "PIP_TRUSTED_HOST",
+        "HTTP_PROXY",
+        "HTTPS_PROXY"
+      ]
+    }
+  }
+}
+

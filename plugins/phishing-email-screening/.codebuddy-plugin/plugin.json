@@ -1,7 +1,7 @@
 {
   "name": "phishing-email-screening",
-  "version": "3.0.0",
-  "description": "Local Coremail metadata phishing-email pre-screening with email and domain allowlists.",
+  "version": "3.1.0",
+  "description": "Coremail metadata phishing-email pre-screening for Codex, CodeBuddy, and Dify MCP.",
   "author": {
     "name": "Phishing Email Screening Maintainers"
   },
@@ -10,7 +10,9 @@
     "phishing",
     "email-security",
     "coremail",
-    "screening"
+    "screening",
+    "mcp",
+    "dify"
   ],
   "skills": [
     "./skills/phishing-email-screening/"

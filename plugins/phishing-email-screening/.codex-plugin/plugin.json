@@ -1,7 +1,7 @@
 {
   "name": "phishing-email-screening",
-  "version": "3.0.0",
-  "description": "Local Coremail metadata phishing-email pre-screening with email and domain allowlists.",
+  "version": "3.1.0",
+  "description": "Coremail metadata phishing-email pre-screening for Codex, CodeBuddy, and Dify MCP.",
   "author": {
     "name": "Phishing Email Screening Maintainers"
   },
@@ -10,13 +10,15 @@
     "phishing",
     "email-security",
     "coremail",
-    "screening"
+    "screening",
+    "mcp",
+    "dify"
   ],
   "skills": "./skills/",
   "interface": {
     "displayName": "Phishing Email Screening",
     "shortDescription": "Screen Coremail metadata for suspicious email",
-    "longDescription": "Run the fixed Coremail metadata pre-screening workflow with local email and domain allowlists, then generate local Markdown, CSV, and JSON reports.",
+    "longDescription": "Run the fixed Coremail metadata pre-screening workflow through a shared local MCP or CLI, with an isolated remote MCP adapter for Dify, then generate local Markdown, CSV, and JSON reports.",
     "developerName": "Phishing Email Screening Maintainers",
     "category": "Productivity",
     "capabilities": [

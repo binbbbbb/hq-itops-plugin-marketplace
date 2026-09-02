@@ -73,6 +73,10 @@ def get_coremail_cookies(request: dict[str, object]) -> tuple[dict[str, str], st
     post_login_wait_ms = int(request.get("postLoginWaitMs", 1_000))
     headless = bool(request.get("headless", True))
     browser_channel = request.get("browserChannel", "chrome")
+    # Bound form interactions explicitly. Playwright's default locator timeout
+    # (30s per action) can exceed the parent watchdog budget, which kills the
+    # helper before it can report a structured diagnostic.
+    action_timeout_ms = min(timeout_ms, 15_000)
 
     with sync_playwright() as playwright:
         launch_options: dict[str, object] = {"headless": headless}
@@ -98,9 +102,9 @@ def get_coremail_cookies(request: dict[str, object]) -> tuple[dict[str, str], st
                 ) from exc
 
             try:
-                page.locator('input[name="uid"]').fill(username)
-                page.locator('input[type="password"]').fill(password)
-                page.locator('input[name="submit"]').click()
+                page.locator('input[name="uid"]').fill(username, timeout=action_timeout_ms)
+                page.locator('input[type="password"]').fill(password, timeout=action_timeout_ms)
+                page.locator('input[name="submit"]').click(timeout=action_timeout_ms)
             except Exception as exc:
                 raise AuthenticationFlowError(
                     "LOGIN_FORM_FAILED",
