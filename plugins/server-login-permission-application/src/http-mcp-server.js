@@ -19,14 +19,6 @@ function sendText(response, statusCode, body, headers = {}) {
   response.end(body);
 }
 
-function tokenMatches(request, expectedToken) {
-  const authorization = String(request.headers.authorization ?? "");
-  if (!authorization.startsWith("Bearer ")) return false;
-  const received = Buffer.from(authorization.slice(7), "utf8");
-  const expected = Buffer.from(expectedToken, "utf8");
-  return received.length === expected.length && crypto.timingSafeEqual(received, expected);
-}
-
 function normalizeOrigin(value) {
   try {
     const origin = new URL(String(value ?? "").trim()).origin;
@@ -82,17 +74,17 @@ function resultStatus(response) {
   }
 }
 
-async function processMessages(handleMessage, payload, { logger, transport }) {
+async function processMessages(handleMessage, payload, { logger, transport, context }) {
   const messages = Array.isArray(payload) ? payload : [payload];
   const responses = [];
   for (const message of messages) {
-    const traceId = crypto.randomUUID();
+    const traceId = context.traceId ?? crypto.randomUUID();
     const method = String(message?.method ?? "invalid");
     const tool = method === "tools/call" ? String(message?.params?.name ?? "unknown") : undefined;
     const startedAt = Date.now();
     logger.info("mcp.call.start", { trace_id: traceId, transport, method, tool, status: "started" });
     try {
-      const response = await handleMessage(message);
+      const response = await handleMessage(message, context);
       if (response) responses.push(response);
       logger.info("mcp.call.finish", {
         trace_id: traceId,
@@ -118,81 +110,54 @@ async function processMessages(handleMessage, payload, { logger, transport }) {
   return { batched: Array.isArray(payload), responses };
 }
 
-function writeSse(response, event, data) {
-  response.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
-}
-
 export function createRemoteMcpServer({
   handleMessage = createMessageHandler(),
-  token = "",
+  authorize,
   allowedOrigins = [],
-  heartbeatMs = 15000,
+  serviceName = "server-login-permission-application",
+  serviceVersion = "unknown",
   logger = NOOP_LOGGER
 } = {}) {
-  const expectedToken = String(token).trim();
-  if (!expectedToken) throw new Error("MCP adapter bearer token is required");
+  if (typeof authorize !== "function") throw new Error("MCP request authorizer is required");
   const originAllowlist = new Set(allowedOrigins.map(normalizeOrigin).filter(Boolean));
-  const sessions = new Map();
 
   const server = http.createServer(async (request, response) => {
     const url = new URL(request.url ?? "/", "http://localhost");
 
     if (request.method === "GET" && url.pathname === "/health") {
-      return sendJson(response, 200, { ok: true, transports: ["streamable-http", "sse"] });
+      return sendJson(response, 200, {
+        ok: true,
+        service: String(serviceName),
+        version: String(serviceVersion),
+        transports: ["streamable-http"]
+      });
     }
 
     if (!originAllowed(request, originAllowlist)) {
       return sendJson(response, 403, { error: "Forbidden origin" });
     }
 
-    if (!tokenMatches(request, expectedToken)) {
-      return sendJson(response, 401, { error: "Unauthorized" }, { "WWW-Authenticate": "Bearer" });
-    }
+    if (url.pathname === "/sse" || url.pathname === "/messages") return sendJson(response, 410, { error: "SSE is not enabled for UAT" });
 
-    if (request.method === "POST" && ["/mcp", "/messages"].includes(url.pathname) && !hasJsonContentType(request)) {
+    if (request.method === "POST" && url.pathname === "/mcp" && !hasJsonContentType(request)) {
       return sendJson(response, 415, { error: "Content-Type must be application/json" });
-    }
-
-    if (request.method === "GET" && url.pathname === "/sse") {
-      const sessionId = crypto.randomUUID();
-      response.writeHead(200, {
-        "Content-Type": "text/event-stream",
-        "Cache-Control": "no-cache, no-transform",
-        Connection: "keep-alive",
-        "X-Accel-Buffering": "no"
-      });
-      response.flushHeaders();
-      sessions.set(sessionId, response);
-      response.write(`event: endpoint\ndata: /messages?sessionId=${encodeURIComponent(sessionId)}\n\n`);
-      const heartbeat = setInterval(() => response.write(": heartbeat\n\n"), heartbeatMs);
-      heartbeat.unref?.();
-      request.on("close", () => {
-        clearInterval(heartbeat);
-        sessions.delete(sessionId);
-      });
-      return;
-    }
-
-    if (request.method === "POST" && url.pathname === "/messages") {
-      const stream = sessions.get(url.searchParams.get("sessionId") ?? "");
-      if (!stream) return sendJson(response, 404, { error: "SSE session not found" });
-      try {
-        const result = await processMessages(handleMessage, await readJson(request), { logger, transport: "sse" });
-        for (const item of result.responses) writeSse(stream, "message", item);
-        response.writeHead(202, { "Cache-Control": "no-store" });
-        return response.end();
-      } catch (error) {
-        return sendJson(response, error.statusCode ?? 500, {
-          error: error.statusCode ? error.message : "Internal error"
-        });
-      }
     }
 
     if (request.method === "POST" && url.pathname === "/mcp") {
       try {
+        let context;
+        const traceId = crypto.randomUUID();
+        try {
+          context = await authorize(request.headers.authorization, { traceId });
+          context = { ...context, traceId: context?.traceId ?? traceId };
+        } catch (error) {
+          const statusCode = error?.code === "AUTH_EXPIRED" ? 401 : 403;
+          return sendJson(response, statusCode, { error: statusCode === 401 ? "Unauthorized" : "Forbidden" }, statusCode === 401 ? { "WWW-Authenticate": "Bearer" } : {});
+        }
         const result = await processMessages(handleMessage, await readJson(request), {
           logger,
-          transport: "streamable-http"
+          transport: "streamable-http",
+          context
         });
         if (!result.responses.length) {
           response.writeHead(202, { "Cache-Control": "no-store" });
@@ -213,10 +178,5 @@ export function createRemoteMcpServer({
     return sendJson(response, 404, { error: "Not Found" });
   });
 
-  server.on("close", () => {
-    for (const response of sessions.values()) response.end();
-    sessions.clear();
-  });
   return server;
 }
-

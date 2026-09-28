@@ -1,6 +1,6 @@
 import { ZeusClient } from "./api-client.js";
 import { ConfirmationStore } from "./confirmation-store.js";
-import { deriveCurrentBadge, loadConfig } from "./config.js";
+import { loadConfig } from "./config.js";
 import { WorkflowError } from "./errors.js";
 import { PermissionWorkflow, publicUser, resolveSystem, resolveUser } from "./workflow.js";
 
@@ -129,26 +129,41 @@ export const MCP_TOOLS = [
   }
 ];
 
-export function createMcpToolRuntime(dependencies = {}) {
-  let runtime;
-  // 惰性初始化
-  function getRuntime() {
-    if (runtime) return runtime;
-    const config = dependencies.config ?? loadConfig();
-    const badge = deriveCurrentBadge({ explicitBadge: config.currentBadge, ...(dependencies.identity ?? {}) });
-    if (!badge) throw new WorkflowError("CURRENT_USER_NOT_FOUND");
-    const client = dependencies.client ?? new ZeusClient({ apiBase: config.apiBase, tokenSign: config.tokenSign, badge });
-    const store = dependencies.store ?? new ConfirmationStore();
-    runtime = {
-      client,
-      currentBadge: badge,
-      workflow: new PermissionWorkflow({ client, store, currentBadge: badge, environment: config.environment })
+export function createRequestAuthorizer(dependencies = {}) {
+  const config = dependencies.config ?? loadConfig();
+  return async function authorize(authorization, { traceId } = {}) {
+    const value = String(authorization ?? "");
+    if (!value.startsWith("Bearer ")) throw new WorkflowError("AUTH_EXPIRED");
+    const client = dependencies.authorizationClientFactory
+      ? dependencies.authorizationClientFactory({ apiBase: config.apiBase, authorization: value, logger: dependencies.logger, traceId })
+      : new ZeusClient({ apiBase: config.apiBase, authorization: value, logger: dependencies.logger, traceId });
+    const result = await client.getMcpAuthorization(config.mcpKey);
+    return {
+      authorization: value,
+      traceId,
+      user: result.user,
+      allowedTools: new Set(result.allowedTools.filter((tool) => MCP_TOOLS.some((item) => item.name === tool)))
     };
-    return runtime;
-  }
+  };
+}
 
-  return async function callTool(name, input = {}) {
-    const { client, currentBadge, workflow } = getRuntime();
+export function createMcpToolRuntime(dependencies = {}) {
+  const config = dependencies.config ?? loadConfig();
+  const store = dependencies.store ?? new ConfirmationStore();
+  return async function callTool(name, input = {}, context = {}) {
+    if (!context.allowedTools?.has(name)) throw new WorkflowError("PERMISSION_DENIED");
+    const client = dependencies.clientFactory
+      ? dependencies.clientFactory({ apiBase: config.apiBase, authorization: context.authorization, logger: dependencies.logger, traceId: context.traceId })
+      : dependencies.client ?? new ZeusClient({ apiBase: config.apiBase, authorization: context.authorization, logger: dependencies.logger, traceId: context.traceId });
+    const resolveCurrentUser = async () => {
+      const currentUser = context.user;
+      if (Number.isInteger(Number(currentUser?.id)) && Number(currentUser.id) > 0) return currentUser;
+      const badge = String(currentUser?.badge ?? "").trim();
+      if (!badge) throw new WorkflowError("CURRENT_USER_NOT_FOUND");
+      const result = await client.listUsers(badge);
+      return resolveUser(Array.isArray(result) ? result : result.items, { badge }, { current: true });
+    };
+    const createWorkflow = (currentUser) => new PermissionWorkflow({ client, store, currentUser, environment: config.environment });
     switch (name) {
       case "search_users": {
         const keyword = String(input.keyword ?? "").trim();
@@ -178,9 +193,7 @@ export function createMcpToolRuntime(dependencies = {}) {
         const defaultedToCurrentUser = input.user_ids === undefined || input.user_ids === null;
         let userIds;
         if (defaultedToCurrentUser) {
-          const result = await client.listUsers(currentBadge);
-          const users = Array.isArray(result) ? result : result.items;
-          userIds = [resolveUser(users, { badge: currentBadge }, { current: true }).id];
+          userIds = [Number((await resolveCurrentUser()).id)];
         } else {
           if (!Array.isArray(input.user_ids) || !input.user_ids.length
             || input.user_ids.some((id) => !Number.isInteger(Number(id)) || Number(id) <= 0)) {
@@ -199,10 +212,12 @@ export function createMcpToolRuntime(dependencies = {}) {
           defaulted_to_current_user: defaultedToCurrentUser
         };
       }
-      case "prepare_application":
+      case "prepare_application": {
+        const workflow = createWorkflow(await resolveCurrentUser());
         return await workflow.prepare(input);
+      }
       case "submit_application":
-        return await workflow.submit(input);
+        return await createWorkflow(context.user).submit(input);
       default:
         throw new WorkflowError("CONFIG_INVALID", { supported_tools: MCP_TOOLS.map((tool) => tool.name) });
     }

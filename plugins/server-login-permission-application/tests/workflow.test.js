@@ -4,8 +4,23 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { ConfirmationStore } from "../src/confirmation-store.js";
-import { deriveCurrentBadge } from "../src/config.js";
-import { PermissionWorkflow, resolveUser } from "../src/workflow.js";
+import { PermissionWorkflow as BasePermissionWorkflow, resolveUser } from "../src/workflow.js";
+
+function uatUser(badge) {
+  return {
+    id: String(badge) === "100002" ? 2 : 1,
+    name: String(badge) === "100002" ? "张三" : "当前用户",
+    badge: String(badge),
+    department: "IT",
+    group: "OPS"
+  };
+}
+
+class PermissionWorkflow extends BasePermissionWorkflow {
+  constructor({ currentBadge, currentUser, ...options }) {
+    super({ ...options, currentUser: currentUser ?? uatUser(currentBadge) });
+  }
+}
 
 function fixtureClient() {
   const submissions = [];
@@ -55,10 +70,6 @@ const validDraft = {
   description: "日常运维需要",
   permissions: [{ asset: "srv-01", accounts: [{ permission_type: "SSH", duration: "7天" }] }]
 };
-
-test("derives badge from CodeBuddy install path", () => {
-  assert.equal(deriveCurrentBadge({ installPath: "C:\\Users\\100001\\.codebuddy\\plugins\\x", home: "X:\\none", env: {}, exists: () => false }), "100001");
-});
 
 test("prepare defaults applicant to current user and emits canonical summary", async (t) => {
   const client = fixtureClient();

@@ -9,7 +9,7 @@ function rpcError(code, message, data) {
 }
 
 export function createMessageHandler({ callTool = createMcpToolRuntime() } = {}) {
-  return async function handleMessage(message) {
+  return async function handleMessage(message, context = {}) {
     if (!message || message.jsonrpc !== "2.0" || typeof message.method !== "string") {
       return { jsonrpc: "2.0", id: message?.id ?? null, error: rpcError(-32600, "Invalid Request") };
     }
@@ -25,21 +25,25 @@ export function createMessageHandler({ callTool = createMcpToolRuntime() } = {})
           result: {
             protocolVersion: String(message.params?.protocolVersion ?? "2024-11-05"),
             capabilities: { tools: { listChanged: false } },
-            serverInfo: { name: "server-login-permission-application", version: "1.4.2" },
+            serverInfo: { name: "server-login-permission-application", version: "2.0.3" },
             instructions: SERVER_INSTRUCTIONS
           }
         };
       case "ping":
         return { jsonrpc: "2.0", id: message.id, result: {} };
       case "tools/list":
-        return { jsonrpc: "2.0", id: message.id, result: { tools: MCP_TOOLS } };
+        return {
+          jsonrpc: "2.0",
+          id: message.id,
+          result: { tools: MCP_TOOLS.filter((tool) => context.allowedTools?.has(tool.name)) }
+        };
       case "tools/call": {
         const name = message.params?.name;
         if (!MCP_TOOLS.some((tool) => tool.name === name)) {
           return { jsonrpc: "2.0", id: message.id, error: rpcError(-32602, "Unknown tool") };
         }
         try {
-          const data = await callTool(name, message.params?.arguments ?? {});
+          const data = await callTool(name, message.params?.arguments ?? {}, context);
           return {
             jsonrpc: "2.0",
             id: message.id,

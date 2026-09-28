@@ -139,12 +139,6 @@ function assetSearchKeyword(client, input) {
     : input);
 }
 
-async function findCurrentUser(client, currentBadge) {
-  if (!currentBadge) throw new WorkflowError("CURRENT_USER_NOT_FOUND");
-  const result = await client.listUsers(currentBadge);
-  return resolveUser(Array.isArray(result) ? result : result.items, { badge: currentBadge }, { current: true });
-}
-
 async function findApplicant(client, input, currentUser) {
   if (input === undefined || input === null || text(input) === "") return { user: currentUser, defaulted: true };
   const query = typeof input === "object" ? input.badge ?? input.name ?? input.id ?? input.value : input;
@@ -153,10 +147,10 @@ async function findApplicant(client, input, currentUser) {
 }
 
 export class PermissionWorkflow {
-  constructor({ client, store, currentBadge, environment = "生产环境" }) {
+  constructor({ client, store, currentUser, environment = "UAT" }) {
     this.client = client;
     this.store = store;
-    this.currentBadge = currentBadge;
+    this.currentUser = currentUser;
     this.environment = environment;
   }
 
@@ -170,7 +164,10 @@ export class PermissionWorkflow {
     const fields = await this.client.listFieldSystems();
     const explicitSystem = draft.field_system ? resolveSystem(fields, draft.field_system) : undefined;
     let system = explicitSystem;
-    const currentUser = await findCurrentUser(this.client, this.currentBadge);
+    const currentUser = this.currentUser;
+    if (!Number.isInteger(Number(currentUser?.id)) || Number(currentUser.id) <= 0 || !text(currentUser?.badge)) {
+      throw new WorkflowError("AUTH_EXPIRED");
+    }
     const payloadPermissions = [];
     const summaryPermissions = [];
     const groupedPermissions = new Map();
@@ -258,7 +255,8 @@ export class PermissionWorkflow {
     const record = this.store.create({
       payload,
       summary,
-      ...(conversationKey ? { context: { principal: this.currentBadge, conversationKey } } : {})
+      actorBadge: currentUser.badge,
+      ...(conversationKey ? { context: { principal: currentUser.badge, conversationKey } } : {})
     });
     if (draft.previous_confirmation_id) this.store.supersede(draft.previous_confirmation_id);
     return { confirmation_id: record.confirmation_id, expires_at: new Date(record.expires_at).toISOString(), summary };
@@ -268,8 +266,12 @@ export class PermissionWorkflow {
     if (confirmationPhrase !== "确认提交") throw new WorkflowError("CONFIRMATION_REQUIRED");
     const conversationKey = optionalConversationKey(rawConversationKey);
     if (confirmationId && conversationKey) throw new WorkflowError("CONFIG_INVALID");
+    const pending = conversationKey
+      ? this.store.loadByContext({ principal: this.currentUser.badge, conversationKey })
+      : this.store.load(confirmationId);
+    if (String(pending.record.actor_badge) !== String(this.currentUser.badge)) throw new WorkflowError("PERMISSION_DENIED");
     const record = conversationKey
-      ? this.store.consumeByContext({ principal: this.currentBadge, conversationKey })
+      ? this.store.consumeByContext({ principal: this.currentUser.badge, conversationKey })
       : this.store.consume(confirmationId);
     const orderId = await this.client.submit(record.payload);
     if (!orderId) {

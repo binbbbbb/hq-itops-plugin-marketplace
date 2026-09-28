@@ -1,7 +1,7 @@
 const SAFE_MESSAGES = {
-  CONFIG_MISSING_SIGN: "缺少 Zeus Token 签名本地配置。",
   CONFIG_INVALID: "Zeus 本地配置无效。",
-  AUTH_FAILED: "Zeus 身份认证失败。",
+  AUTH_EXPIRED: "Zeus UAT 用户 Token 无效或已过期。",
+  PERMISSION_DENIED: "当前用户没有调用此 MCP Tool 的权限。",
   API_UNAVAILABLE: "Zeus 接口当前不可用。",
   API_REJECTED: "Zeus 拒绝了当前请求。",
   SUBMISSION_UNCERTAIN: "提交结果不确定，请在“我的申请”中核对，禁止自动重试。",

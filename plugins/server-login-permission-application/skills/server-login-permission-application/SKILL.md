@@ -19,7 +19,7 @@ Use the MCP tools as follows:
 
 - `search_users`: search by badge or name. For duplicate names, show the returned name, badge, department, and group and require a choice.
 - `search_servers`: search the full live asset list by resource name or ID when no field/system was supplied. Each candidate includes its canonical field and system; once the user selects a resource, use those values as the defaults. If the user explicitly supplied a field/system, pass it to scope the search.
-- `get_permission_options`: retrieve permission types and per-user durations for a canonical system and resource. For the default current applicant, omit `user_ids` so the MCP resolves the configured current user; never send an empty array. For explicitly selected applicants, pass their non-empty canonical user ID list.
+- `get_permission_options`: retrieve permission types and per-user durations for a canonical system and resource. For the default current applicant, omit `user_ids` so the MCP uses the Zeus user authenticated by the current MCP request; never send an empty array. For explicitly selected applicants, pass their non-empty canonical user ID list.
 - `prepare_application`: resolve and revalidate the complete draft, store a short-lived pending confirmation, and return the normalized summary without submitting.
 - `submit_application`: perform the one allowed Zeus write after the exact second confirmation.
 
@@ -54,7 +54,7 @@ All resources in one application must resolve to the same field/system. If `ASSE
 
 After `prepare_application` succeeds, print the complete returned summary, including production environment, submitter, field/system, reason, every resource, every applicant name and badge, permission type, and duration. Preserve the confirmation ID privately for the next step and say: `请核对以上信息，仅回复“确认提交”才会正式提单；如需修改，请直接说明字段。`
 
-If the host runtime provides a stable opaque conversation key, pass it as `conversation_key` to every `prepare_application` call for that request and later pass the same key to `submit_application`. The MCP binds it to the configured current user and stores only a hash of the binding. In this mode, do not carry or send `confirmation_id`, do not pass `previous_confirmation_id` when revising, and never expose either identifier. If the host does not provide a stable conversation key, retain the private confirmation-ID flow below.
+If the host runtime provides a stable opaque conversation key, pass it as `conversation_key` to every `prepare_application` call for that request and later pass the same key to `submit_application`. The MCP binds it to the Zeus user authenticated by the current MCP request and stores only a hash of the binding. In this mode, do not carry or send `confirmation_id`, do not pass `previous_confirmation_id` when revising, and never expose either identifier. If the host does not provide a stable conversation key, retain the private confirmation-ID flow below.
 
 - Do not submit for `好`, `可以`, `是`, `确认`, or any other phrase.
 - If the user changes any field, run `prepare_application` again; the previous confirmation becomes invalid.

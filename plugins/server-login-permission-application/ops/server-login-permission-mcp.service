@@ -1,0 +1,17 @@
+[Unit]
+Description=Server Login Permission MCP (UAT)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/hq-itops/server-permission-mcp/current
+EnvironmentFile=/etc/mcp/server-login-permission.env
+ExecStart=/usr/bin/node scripts/runtime-http.js
+KillSignal=SIGTERM
+TimeoutStopSec=30
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

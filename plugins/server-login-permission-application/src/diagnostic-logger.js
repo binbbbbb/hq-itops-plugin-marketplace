@@ -5,7 +5,15 @@ const SAFE_FIELD_NAMES = new Set([
   "tool",
   "status",
   "duration_ms",
-  "error_code"
+  "error_code",
+  "upstream_origin",
+  "upstream_path",
+  "upstream_final_origin",
+  "upstream_final_path",
+  "upstream_http_status",
+  "authorization_present",
+  "authorization_fingerprint",
+  "redirected"
 ]);
 
 function safeFields(fields) {

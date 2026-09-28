@@ -1,4 +1,28 @@
+import crypto from "node:crypto";
 import { WorkflowError } from "./errors.js";
+
+const NOOP_LOGGER = { info() {} };
+
+function authorizationFingerprint(authorization) {
+  if (!authorization) return undefined;
+  return crypto.createHash("sha256").update(authorization).digest("hex").slice(0, 16);
+}
+
+function responseLocation(response, fallback) {
+  try {
+    return new URL(response?.url || fallback);
+  } catch {
+    return fallback;
+  }
+}
+
+function normalizeAuthorizedUser(user) {
+  if (!user || typeof user !== "object" || Array.isArray(user)) return user;
+  const id = [user.id, user.user_id, user.userId, user.uid]
+    .map(Number)
+    .find((value) => Number.isInteger(value) && value > 0);
+  return id === undefined ? user : { ...user, id };
+}
 
 const BACKEND_CODES = new Map([
   ["SYSTEM_NOT_FOUND", "SYSTEM_NOT_FOUND"],
@@ -129,13 +153,13 @@ export function normalizePermissionOptions(data) {
 }
 
 export class ZeusClient {
-  constructor({ apiBase, tokenSign, badge, fetchImpl = globalThis.fetch, timeoutMs = 15000 }) {
+  constructor({ apiBase, authorization = "", fetchImpl = globalThis.fetch, timeoutMs = 15000, logger = NOOP_LOGGER, traceId } = {}) {
     this.apiBase = apiBase;
-    this.tokenSign = tokenSign;
-    this.badge = badge;
+    this.authorization = String(authorization);
     this.fetchImpl = fetchImpl;
     this.timeoutMs = timeoutMs;
-    this.accessToken = "";
+    this.logger = logger && typeof logger.info === "function" ? logger : NOOP_LOGGER;
+    this.traceId = traceId === undefined ? undefined : String(traceId);
     this.assetsById = new Map();
   }
 
@@ -146,22 +170,57 @@ export class ZeusClient {
     }
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);
+    const startedAt = Date.now();
+    const requestLog = {
+      trace_id: this.traceId,
+      upstream_origin: url.origin,
+      upstream_path: url.pathname,
+      authorization_present: authenticated ? String(this.authorization.startsWith("Bearer ")) : "false",
+      ...(authenticated && this.authorization.startsWith("Bearer ")
+        ? { authorization_fingerprint: authorizationFingerprint(this.authorization) }
+        : {})
+    };
+    this.logger.info("zeus.request.start", requestLog);
+    let response;
     try {
       const headers = { Accept: "application/json", "Content-Type": "application/json" };
-      if (authenticated) headers.Authorization = `Bearer ${await this.getAccessToken()}`;
-      const response = await this.fetchImpl(url, {
+      if (authenticated) {
+        if (!this.authorization.startsWith("Bearer ")) throw new WorkflowError("AUTH_EXPIRED");
+        headers.Authorization = this.authorization;
+      }
+      response = await this.fetchImpl(url, {
         method,
         headers,
         body: body === undefined ? undefined : JSON.stringify(body),
         signal: controller.signal
       });
-      if (!response.ok) throw new WorkflowError(submission ? "SUBMISSION_UNCERTAIN" : "API_UNAVAILABLE");
+      const finalUrl = responseLocation(response, url);
+      this.logger.info("zeus.request.finish", {
+        ...requestLog,
+        upstream_final_origin: finalUrl.origin,
+        upstream_final_path: finalUrl.pathname,
+        upstream_http_status: response.status,
+        redirected: String(Boolean(response.redirected || finalUrl.origin !== url.origin || finalUrl.pathname !== url.pathname)),
+        duration_ms: Date.now() - startedAt
+      });
+      if (!response.ok) {
+        if (response.status === 401) throw new WorkflowError("AUTH_EXPIRED");
+        if (response.status === 403) throw new WorkflowError("PERMISSION_DENIED");
+        throw new WorkflowError(submission ? "SUBMISSION_UNCERTAIN" : "API_UNAVAILABLE");
+      }
       try {
         return await response.json();
       } catch (error) {
         throw new WorkflowError(submission ? "SUBMISSION_UNCERTAIN" : "API_UNAVAILABLE", undefined, error);
       }
     } catch (error) {
+      if (!response) {
+        this.logger.info("zeus.request.finish", {
+          ...requestLog,
+          status: "network_error",
+          duration_ms: Date.now() - startedAt
+        });
+      }
       if (error instanceof WorkflowError) throw error;
       throw new WorkflowError(submission ? "SUBMISSION_UNCERTAIN" : "API_UNAVAILABLE", undefined, error);
     } finally {
@@ -169,12 +228,18 @@ export class ZeusClient {
     }
   }
 
-  async getAccessToken() {
-    if (this.accessToken) return this.accessToken;
-    const response = await this.rawRequest("/api/token", { authenticated: false, params: { badge: this.badge, sign: this.tokenSign } });
-    if (response?.code !== 100000 || !response?.data?.access_token) throw new WorkflowError("AUTH_FAILED");
-    this.accessToken = String(response.data.access_token);
-    return this.accessToken;
+  async getMcpAuthorization(mcpKey) {
+    const body = await this.rawRequest("/api/mcp/me", { params: { mcp_key: mcpKey } });
+    const payload = body?.data && typeof body.data === "object" ? body.data : body;
+    if (!payload?.user || !payload?.authorization?.access || payload.authorization.mcp_key !== mcpKey) {
+      throw new WorkflowError("PERMISSION_DENIED");
+    }
+    return {
+      user: normalizeAuthorizedUser(payload.user),
+      allowedTools: Array.isArray(payload.authorization.allowed_tools)
+        ? payload.authorization.allowed_tools.map(String)
+        : []
+    };
   }
 
   async listFieldSystems() {
@@ -202,10 +267,17 @@ export class ZeusClient {
   async listAssets({ systemId, keyword = "", pageSize = 200, maxPages = 20 } = {}) {
     const collected = [];
     let truncated = false;
+    const normalizedKeyword = String(keyword).trim();
     for (let page = 1; page <= maxPages; page += 1) {
-      const data = expectSuccess(await this.rawRequest("/api/resource_center/asset_info_list", {
-        params: { system_id: systemId, keyword, page, page_size: pageSize }
-      }), "assets");
+      let data;
+      try {
+        data = expectSuccess(await this.rawRequest("/api/resource_center/asset_info_list", {
+          params: { system_id: systemId, keyword: normalizedKeyword, page, page_size: pageSize }
+        }), "assets");
+      } catch (error) {
+        if (error?.code === "API_REJECTED" && normalizedKeyword) throw new WorkflowError("ASSET_NOT_FOUND");
+        throw error;
+      }
       const pageItems = normalizeAssets(data);
       for (const asset of pageItems) if (Number.isInteger(asset.id) && asset.id > 0) this.assetsById.set(asset.id, asset);
       collected.push(...pageItems);

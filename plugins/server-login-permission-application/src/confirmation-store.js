@@ -72,7 +72,7 @@ export class ConfirmationStore {
     }
   }
 
-  create({ payload, summary, context }) {
+  create({ payload, summary, context, actorBadge }) {
     this.pruneExpired();
     const bindingHash = contextHash(context);
     this.supersedeContext(bindingHash);
@@ -80,6 +80,7 @@ export class ConfirmationStore {
     const createdAt = this.now();
     const record = {
       confirmation_id: confirmationId,
+      actor_badge: String(actorBadge),
       created_at: createdAt,
       expires_at: createdAt + this.ttlMs,
       status: "pending",

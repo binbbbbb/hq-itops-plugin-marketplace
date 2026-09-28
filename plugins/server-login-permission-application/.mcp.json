@@ -10,9 +10,8 @@
         "HQ_ITOPS_MCP_PLUGIN": "server-login-permission-application"
       },
       "env_vars": [
-        "ZEUS_TOKEN_SIGN",
         "ZEUS_API_BASE",
-        "ZEUS_CURRENT_BADGE"
+        "MCP_KEY"
       ]
     }
   }

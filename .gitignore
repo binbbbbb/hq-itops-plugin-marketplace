@@ -20,3 +20,5 @@
 .codebuddy/memory/
 # 临时文件
 outputs/
+# 压缩文件  
+*.gz
